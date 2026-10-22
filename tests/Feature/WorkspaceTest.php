@@ -283,6 +283,6 @@ class WorkspaceTest extends TestCase
 
     public function test_shell_renders_server_content_and_spa_contract(): void
     {
-        $this->get('/')->assertOk()->assertSee('Gehihi')->assertSee('Ý tưởng tiếp theo')->assertSee('APP_CONFIGS',false)->assertSee('csrf-token',false);
+        $this->get('/')->assertOk()->assertSee('Gehihi')->assertSee('Hôm nay bạn muốn tìm hiểu gì')->assertSee('APP_CONFIGS',false)->assertSee('csrf-token',false);
     }
 }
