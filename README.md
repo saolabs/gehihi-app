@@ -14,6 +14,7 @@ php artisan key:generate
 touch database/database.sqlite
 php artisan migrate
 npm run build:all
+php artisan saola:assets
 php artisan serve --host=127.0.0.1 --port=8010 --no-reload
 ```
 
@@ -29,7 +30,7 @@ Mở [Gehihi trên localhost](http://127.0.0.1:8010). Môi trường hiện tạ
 
 - Tạo tài khoản từ Cài đặt để thêm provider cá nhân. Người đăng ký đầu tiên có quyền người dùng thông thường.
 - Cấp quyền quản trị bằng `php artisan gehihi:admin your-email@example.com`. Lệnh sẽ hỏi mật khẩu nếu tài khoản chưa tồn tại.
-- Quản trị mở Cài đặt → Hệ thống để thêm provider dùng chung cho khách. Cần một provider LLM; Tra cứu web/Research cần thêm provider tìm kiếm độc lập.
+- Trang quản trị ở `/admin`: Tổng quan (lượt chạy, token, lỗi theo ngày), Provider (provider dùng chung cho khách, tình trạng key), Người dùng (cấp/thu quyền) và Hạn mức (lưu ở bảng `app_settings`, áp dụng ngay cả với worker đang chạy). Cần một provider LLM; Tra cứu web/Research cần thêm provider tìm kiếm độc lập.
 - Form cho phép tải model, nhập model thủ công, kiểm tra từng key, đặt mặc định, chỉ định model nhận ảnh/suy luận và bật/tắt. Để trống ô key khi sửa sẽ giữ key cũ.
 - Model và key thật không được chép từ `seo-expert`. App hiện chưa có provider thật được cài sẵn.
 
@@ -46,7 +47,17 @@ Adapter văn bản: Gemini, OpenAI, Anthropic và API OpenAI-compatible; DeepSee
 
 ## Phát triển và kiểm tra
 
-Nguồn giao diện: `resources/saola/**/*.sao`, service TypeScript tại `resources/saola/web/app/services`. Sửa nguồn `.sao`, sau đó build; các thư mục `resources/js/saola` và Blade `web/admin` là đầu ra compiler. Shell Blade `_system` được duy trì thủ công.
+Kiến trúc multi-context modular của Saola: ba context `web` (`/`), `admin` (`/admin`, cần quyền quản trị) và `api` (`/api`). Mỗi module dưới `app/Modules/{Name}` tự khai báo route cho các context trong `ModuleServiceProvider::routes()`, controller tách theo `Http/Controllers/{Web,Admin,Api}`; module được tự phát hiện, không khai báo route trong `routes/web.php`.
+
+| Module | web | admin | api |
+| --- | --- | --- | --- |
+| Workspace | màn chat | — | bootstrap, dự án, hội thoại, tệp |
+| Identity | — | Người dùng | đăng nhập/đăng ký |
+| AiProviders | — | Provider hệ thống | provider cá nhân |
+| AiRuntime | — | Hạn mức | lượt chạy, usage |
+| Dashboard | — | Tổng quan | — |
+
+Nguồn giao diện: `resources/saola/{web,admin}/views/**/*.sao`; view admin nhận dữ liệu qua `@vars` + `@await` từ controller, thao tác gọi `App.Http` vào chính route của module. Service TypeScript tại `resources/saola/{web,admin}/app/services`. Sửa nguồn `.sao`, sau đó build; các thư mục `resources/js/saola` và Blade `web/admin` là đầu ra compiler. Shell Blade `_system` được duy trì thủ công.
 
 ```sh
 npm run build:all

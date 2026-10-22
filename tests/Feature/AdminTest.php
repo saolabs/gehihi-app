@@ -28,10 +28,10 @@ class AdminTest extends TestCase
 
     public function test_admin_endpoints_require_admin(): void
     {
-        $this->getJson('/api/admin/overview')->assertUnauthorized();
+        $this->getJson('/admin')->assertUnauthorized();
         $user = User::create(['name' => 'U', 'email' => 'u@example.test', 'password' => Str::random(16)]);
-        $this->actingAs($user)->getJson('/api/admin/overview')->assertForbidden();
-        $this->actingAs($user)->putJson('/api/admin/limits', [])->assertForbidden();
+        $this->actingAs($user)->getJson('/admin')->assertForbidden();
+        $this->actingAs($user)->putJson('/admin/limits', [])->assertForbidden();
     }
 
     public function test_overview_and_provider_health_aggregate_runs(): void
@@ -42,17 +42,16 @@ class AdminTest extends TestCase
         app(ProviderRepositoryInterface::class)->cooldown($p, 'k1', 60);
         $admin = $this->admin();
 
-        $data = $this->actingAs($admin)->getJson('/api/admin/overview?days=7')->assertOk()->json('data');
-        $this->assertSame(2, $data['totals']['runs']);
-        $this->assertSame(1, $data['totals']['failed']);
-        $this->assertSame(300, $data['totals']['tokens']);
-        $this->assertCount(7, $data['series']);
-        $this->assertSame(2, end($data['series'])['runs']);
+        $data = $this->actingAs($admin)->getJson('/admin?days=7')->assertOk()->json('data');
+        $stats = array_column($data['stats'], 'value', 'id');
+        $this->assertSame(['2', '300', '50%'], [$stats['runs'], $stats['tokens'], $stats['failed']]);
+        $this->assertCount(7, $data['bars']);
+        $this->assertSame(100.0, (float) end($data['bars'])['height']);
         $this->assertSame('Pool · m1', $data['models'][0]['name']);
         $this->assertSame('Provider lỗi', $data['failures'][0]['error']);
 
-        $system = $this->actingAs($admin)->getJson('/api/admin/providers')->assertOk()->json('data.system.0');
-        $this->assertSame([2, 1, 2, 1], [$system['key_count'], $system['cooling_keys'], $system['runs_7d'], $system['failed_7d']]);
+        $system = $this->actingAs($admin)->getJson('/admin/providers')->assertOk()->json('data.rows.0');
+        $this->assertSame(['2 (1 tạm khóa)', '2', '50%', 'warn'], [$system['keys'], $system['runs'], $system['fail_rate'], $system['status']]);
         $this->assertArrayNotHasKey('secrets', $system);
     }
 
@@ -60,30 +59,47 @@ class AdminTest extends TestCase
     {
         $admin = $this->admin();
         $this->seedRun('completed', 50);
-        $users = $this->actingAs($admin)->getJson('/api/admin/users')->assertOk()->json('data.users');
+        $users = $this->actingAs($admin)->getJson('/admin/users')->assertOk()->json('data.users');
         $this->assertCount(2, $users);
         $other = collect($users)->firstWhere('is_admin', false);
-        $this->assertSame([1, 50], [$other['runs_30d'], $other['tokens_30d']]);
+        $this->assertSame(['1', '50'], [$other['runs'], $other['tokens']]);
 
-        $this->actingAs($admin)->patchJson('/api/admin/users/'.$other['id'], ['is_admin' => true])->assertOk();
+        $this->actingAs($admin)->putJson('/admin/users/'.$other['id'], ['is_admin' => true])->assertOk();
         $this->assertTrue(User::find($other['id'])->is_admin);
-        $this->actingAs($admin)->patchJson('/api/admin/users/'.$admin->id, ['is_admin' => false])->assertStatus(422);
+        $this->actingAs($admin)->putJson('/admin/users/'.$admin->id, ['is_admin' => false])->assertStatus(422);
         $this->assertTrue($admin->fresh()->is_admin);
-        $this->assertCount(1, $this->actingAs($admin)->getJson('/api/admin/users?q=admin@')->json('data.users'));
+        $this->assertCount(1, $this->actingAs($admin)->getJson('/admin/users?q=admin@')->json('data.users'));
     }
 
     public function test_limits_are_validated_saved_and_applied_to_config(): void
     {
         $admin = $this->admin();
-        $limits = $this->actingAs($admin)->getJson('/api/admin/limits')->assertOk()->json('data.limits');
+        $groups = $this->actingAs($admin)->getJson('/admin/limits')->assertOk()->json('data.groups');
+        $limits = collect($groups)->flatMap(fn ($g) => collect($g['fields'])->pluck('value', 'key'))->all();
         $this->assertSame(config('gehihi.daily_runs'), $limits['daily_runs']);
 
-        $this->actingAs($admin)->putJson('/api/admin/limits', ['limits' => [...$limits, 'daily_runs' => 0]])->assertUnprocessable();
-        $saved = $this->actingAs($admin)->putJson('/api/admin/limits', ['limits' => [...$limits, 'daily_runs' => 7, 'research_deep_pages' => 20]])->assertOk()->json('data');
-        $this->assertSame(7, $saved['limits']['daily_runs']);
-        $this->assertSame(50, $saved['defaults']['daily_runs']);
+        $this->actingAs($admin)->putJson('/admin/limits', [...$limits, 'daily_runs' => 0])->assertUnprocessable();
+        $saved = $this->actingAs($admin)->putJson('/admin/limits', [...$limits, 'daily_runs' => 7, 'research_deep_pages' => 20])->assertOk()->json('data.groups.0.fields.0');
+        $this->assertSame([7, true, 'Mặc định 50'], [$saved['value'], $saved['changed'], $saved['hint']]);
         $this->assertSame(7, config('gehihi.daily_runs'));
         $this->assertSame(20, config('gehihi.research.deep.pages'));
         $this->assertSame(7, json_decode(DB::table('app_settings')->value('value'), true)['daily_runs']);
+    }
+
+    public function test_admin_manages_system_providers_through_module_routes(): void
+    {
+        config(['gehihi.egress_allowlist' => ['api.example.test']]);
+        $admin = $this->admin();
+        $form = ['name' => 'Pool', 'type' => 'openai_compatible', 'base_url' => 'https://api.example.test/v1', 'models' => "m1\nm2", 'default_model' => 'm2', 'vision_models' => 'm1', 'enabled' => true];
+        $this->actingAs($admin)->postJson('/admin/providers', $form)->assertCreated();
+        $p = Provider::firstOrFail();
+        $this->assertNull($p->user_id);
+        $edit = $this->actingAs($admin)->getJson('/admin/providers/'.$p->id)->assertOk()->json('data.provider');
+        $this->assertSame(["m1\nm2", 'm1', 0], [$edit['models'], $edit['vision_models'], $edit['key_count']]);
+        $this->actingAs($admin)->putJson('/admin/providers/'.$p->id, [...$form, 'name' => 'Pool 2'])->assertOk();
+        $this->assertSame('Pool 2', $p->fresh()->name);
+        $this->actingAs($admin)->deleteJson('/admin/providers/'.$p->id)->assertOk()->assertJsonPath('data.rows', []);
+        $personal = Provider::create(['name' => 'Mine', 'user_id' => $admin->id, 'kind' => 'llm', 'type' => 'openai_compatible', 'base_url' => 'https://api.example.test/v1', 'models' => ['m1'], 'default_model' => 'm1']);
+        $this->actingAs($admin)->getJson('/admin/providers/'.$personal->id)->assertNotFound();
     }
 }

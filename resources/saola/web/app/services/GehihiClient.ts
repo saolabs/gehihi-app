@@ -41,7 +41,6 @@ export class GehihiClient {
             this.applyTheme(pref.theme || 'system');
             await this.route();
             const params = new URLSearchParams(location.search);
-            if (params.get('manage') === 'system' && this.state.user?.is_admin) await this.settings(true);
             if (params.has('login') && !this.state.user) this.patch({ modal: 'login' });
             if (params.has('reset_token')) this.patch({ modal: 'reset', resetToken: params.get('reset_token'), resetEmail: params.get('email') || '' });
         });

@@ -1,0 +1,58 @@
+@vars(q = '', users = [])
+@await
+@states({ list: users, error: '', notice: '', busy: false })
+
+<template>
+@extends(__layout__ + 'base')
+@section('meta:title', 'Người dùng · Quản trị Gehihi')
+@block('content')
+<header class="adm-page-head">
+    <div><h1>Người dùng</h1><p class="muted">{{ list.length }} tài khoản · mức sử dụng 30 ngày gần nhất</p></div>
+    <form class="search-box adm-search" role="search" @submit(search(event))><svg class="i" aria-hidden="true"><use href="#i-search"></use></svg><input type="search" name="q" aria-label="Tìm người dùng" placeholder="Tìm theo tên hoặc email…" value="{{ q }}"></form>
+</header>
+@if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
+@if(notice)<p class="probe-results test-ok" role="status">{{ notice }}</p>@endif
+<section class="adm-card">
+    <div class="adm-table-wrap">
+        <table class="adm-table">
+            <thead><tr><th>Người dùng</th><th>Tham gia</th><th>Hội thoại</th><th>Lượt 30 ngày</th><th>Token 30 ngày</th><th>Quyền</th></tr></thead>
+            <tbody>
+                @foreach(list as u)
+                @key(u['key'])
+                <tr>
+                    <td><div class="adm-user"><span class="avatar">{{ u['initial'] }}</span><div><strong>{{ u['name'] }}{{ u['is_me'] ? ' (bạn)' : '' }}</strong><small>{{ u['email'] }}</small></div></div></td>
+                    <td>{{ u['joined'] }}</td><td>{{ u['conversations'] }}</td><td>{{ u['runs'] }}</td><td>{{ u['tokens'] }}</td>
+                    <td><button class="small-button {{ u['is_admin'] ? 'adm-admin-on' : '' }}" @disabled(busy || u['is_me']) title="{{ u['is_me'] ? 'Không thể tự thu quyền của chính bạn' : (u['is_admin'] ? 'Bấm để thu quyền quản trị' : 'Bấm để cấp quyền quản trị') }}" @click(toggle(u))><svg class="i" aria-hidden="true"><use href="#i-shield"></use></svg>{{ u['is_admin'] ? 'Quản trị' : 'Thành viên' }}</button></td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+    @if(list.length === 0)<p class="empty-state-text">Không tìm thấy người dùng nào.</p>@endif
+</section>
+@endblock
+</template>
+
+<script setup lang="ts">
+    import { App } from '@saolabs/client';
+    import { send } from '@admin/app/services/AdminHttp';
+
+    function search(event: Event) {
+        event.preventDefault();
+        const value = String(new FormData(event.currentTarget as HTMLFormElement).get('q') || '').trim();
+        App.Router.navigate('/admin/users' + (value ? '?q=' + encodeURIComponent(value) : ''));
+    }
+
+    async function toggle(user: any) {
+        const grant = !user.is_admin;
+        if (!confirm((grant ? 'Cấp quyền quản trị cho ' : 'Thu quyền quản trị của ') + user.email + '?')) return;
+        setBusy(true);
+        setError('');
+        setNotice('');
+        try {
+            setList((await send('put', '/admin/users/' + user.id, { is_admin: grant, q })).users);
+            setNotice(grant ? 'Đã cấp quyền quản trị.' : 'Đã thu quyền quản trị.');
+        } catch (e: any) { setError(e.message); }
+        finally { setBusy(false); }
+    }
+</script>

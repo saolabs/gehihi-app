@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Identity\Http;
+namespace App\Modules\Identity\Http\Controllers\Api;
 
 use App\Http\Controllers\ApiController;
 use App\Modules\Identity\Services\IdentityService;
@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 
-class IdentityController extends ApiController
+class AuthController extends ApiController
 {
     public function __construct(private IdentityService $service) {}
 

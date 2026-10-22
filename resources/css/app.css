@@ -389,15 +389,16 @@ button, a, label { -webkit-tap-highlight-color: transparent; }
 .modal label, .advanced-options label { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 500; color: var(--fg-2); }
 .modal label small { font-weight: 400; color: var(--muted); }
 .modal input:not([type=checkbox]):not([type=file]), .modal textarea, .modal select,
+.adm-form input:not([type=checkbox]), .adm-form textarea, .adm-form select,
 .advanced-options input, .advanced-options select, .settings-appearance select {
     width: 100%; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface);
     font-size: 14.5px; font-weight: 400; color: var(--fg); outline: 0; transition: border-color .15s, box-shadow .15s;
 }
-.modal input:focus, .modal textarea:focus, .modal select:focus, .advanced-options input:focus, .advanced-options select:focus {
+.modal input:focus, .modal textarea:focus, .modal select:focus, .adm-form input:focus, .adm-form textarea:focus, .adm-form select:focus, .advanced-options input:focus, .advanced-options select:focus {
     border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-subtle);
 }
-.modal textarea { resize: vertical; line-height: 1.5; }
-.modal input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--brand); }
+.modal textarea, .adm-form textarea { resize: vertical; line-height: 1.5; }
+.modal input[type=checkbox], .adm-form input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--brand); }
 .two-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .checkboxes { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .checkboxes label { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; color: var(--fg); }
@@ -441,15 +442,33 @@ button, a, label { -webkit-tap-highlight-color: transparent; }
 .test-error { color: var(--danger); }
 
 /* ── Admin ───────────────────────────────────────── */
+.adm-inline-link { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; background: var(--brand-subtle); color: var(--brand); font-size: 13.5px; font-weight: 500; }
+.adm-inline-link .i { width: 16px; height: 16px; }
+.adm-inline-link .i:last-child { margin-left: auto; }
 .adm-badge { margin-left: 2px; padding: 2px 8px; border-radius: 999px; background: var(--brand-subtle); color: var(--brand); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .adm-nav { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
 .adm-shell .sidebar > .nav-item { color: var(--muted); }
-.adm-shell .topbar { border-bottom-color: var(--line); background: color-mix(in srgb, var(--surface) 85%, transparent); }
-.adm-shell .mode-tabs button { padding: 0 12px; }
+.adm-topbar { display: none; }
+.adm-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.adm-shell .mode-tabs a { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.adm-shell .mode-tabs a:hover { color: var(--fg); }
+.adm-shell .mode-tabs a.active { background: var(--surface); color: var(--brand); box-shadow: var(--shadow-sm); }
+.adm-page-head { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; }
+.adm-page-head h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.adm-page-head p { margin: 4px 0 0; font-size: 14px; max-width: 640px; }
+.adm-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13.5px; color: var(--muted); }
+.adm-back .i { width: 16px; height: 16px; }
+.adm-back:hover { color: var(--brand); }
+.adm-row-link:hover strong { color: var(--brand); }
+.adm-row-actions { text-align: right; }
+.adm-row-actions > * { vertical-align: middle; }
+.adm-form { display: flex; flex-direction: column; gap: 14px; }
+.adm-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 500; color: var(--fg-2); }
+.adm-form label small { font-weight: 400; color: var(--muted); }
+.adm-form .checkboxes label { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; color: var(--fg); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .admin-link { margin-top: 4px; color: var(--muted); }
 .adm-content { display: flex; flex-direction: column; gap: 16px; padding: 24px; max-width: 1180px; width: 100%; margin: 0 auto; transition: opacity .15s; }
-.adm-content.is-busy { opacity: .6; }
-.adm-loading { text-align: center; padding: 60px 0; }
 .adm-card { padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
 .adm-card-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
 .adm-card-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
@@ -522,6 +541,7 @@ button, a, label { -webkit-tap-highlight-color: transparent; }
 .adm-input input { flex: 1; min-width: 0; padding: 9px 12px; border: 0; outline: 0; background: transparent; font-size: 15px; font-variant-numeric: tabular-nums; }
 .adm-input em { padding-right: 12px; font-style: normal; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .adm-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 40%); }
+@media (max-width: 900px) { .adm-topbar { display: flex; } }
 @media (max-width: 1000px) { .adm-stats { grid-template-columns: repeat(2, 1fr); } .adm-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) {
     .adm-content { padding: 14px; gap: 12px; }

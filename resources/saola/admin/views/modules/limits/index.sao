@@ -1,0 +1,55 @@
+@vars(groups = [])
+@await
+@states({ list: groups, error: '', notice: '', busy: false })
+
+<template>
+@extends(__layout__ + 'base')
+@section('meta:title', 'Hạn mức · Quản trị Gehihi')
+@block('content')
+<header class="adm-page-head">
+    <div><h1>Hạn mức sử dụng</h1><p class="muted">Áp dụng ngay cho lượt chạy mới của mọi workspace, kể cả worker đang chạy. Lượt đang chạy giữ hạn mức lúc bắt đầu.</p></div>
+</header>
+<form class="adm-limits" @submit(save(event))>
+    @if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
+    @if(notice)<p class="probe-results test-ok" role="status">{{ notice }}</p>@endif
+    @foreach(list as group)
+    @key(group['id'])
+    <section class="adm-card">
+        <div class="adm-card-head"><h2>{{ group['title'] }}</h2></div>
+        <div class="adm-fields">
+            @foreach(group['fields'] as field)
+            @key(field['key'])
+            <label class="adm-field {{ field['changed'] ? 'changed' : '' }}"><span>{{ field['label'] }}</span><span class="adm-input"><input type="number" name="{{ field['key'] }}" value="{{ field['value'] }}" min="{{ field['min'] }}" max="{{ field['max'] }}" step="1" required><em>{{ field['unit'] }}</em></span><small>{{ field['hint'] }}</small></label>
+            @endforeach
+        </div>
+    </section>
+    @endforeach
+    <div class="adm-actions"><button type="button" class="small-button" @disabled(busy) @click(reset())>Khôi phục mặc định</button><button class="primary-button" @disabled(busy)>{{ busy ? 'Đang lưu…' : 'Lưu hạn mức' }}</button></div>
+</form>
+@endblock
+</template>
+
+<script setup lang="ts">
+    import { send } from '@admin/app/services/AdminHttp';
+
+    async function submit(values: Record<string, number>, done: string) {
+        setBusy(true);
+        setError('');
+        setNotice('');
+        try { setList((await send('put', '/admin/limits', values)).groups); setNotice(done); }
+        catch (e: any) { setError(e.message); }
+        finally { setBusy(false); }
+    }
+
+    function save(event: Event) {
+        event.preventDefault();
+        const values = Object.fromEntries([...new FormData(event.currentTarget as HTMLFormElement)].map(([k, v]) => [k, Number(v)]));
+        return submit(values, 'Đã lưu hạn mức.');
+    }
+
+    function reset() {
+        if (!confirm('Đưa mọi hạn mức về giá trị mặc định?')) return;
+        const values = Object.fromEntries(list.flatMap((g: any) => g.fields.map((f: any) => [f.key, f.default])));
+        return submit(values, 'Đã khôi phục hạn mức mặc định.');
+    }
+</script>

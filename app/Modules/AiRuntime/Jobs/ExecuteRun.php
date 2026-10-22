@@ -2,7 +2,7 @@
 
 namespace App\Modules\AiRuntime\Jobs;
 
-use App\Modules\Admin\Services\Limits;
+use App\Modules\AiRuntime\Services\Limits;
 use App\Modules\AiRuntime\Repositories\RunRepositoryInterface;
 use App\Modules\AiRuntime\Services\Executor;
 use Illuminate\Contracts\Queue\ShouldQueue;

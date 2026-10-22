@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Workspace\Http;
+namespace App\Modules\Workspace\Http\Controllers\Web;
 
 use App\Http\Controllers\WebController;
 

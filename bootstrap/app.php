@@ -1,7 +1,7 @@
 <?php
 
 use App\Modules\AiProviders\Services\ProviderFailure;
-use App\Modules\Identity\Http\WorkspaceSession;
+use App\Modules\Identity\Http\Middleware\WorkspaceSession;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;

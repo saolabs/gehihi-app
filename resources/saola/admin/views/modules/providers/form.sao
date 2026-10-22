@@ -1,0 +1,99 @@
+@vars(provider = {}, types = [])
+@await
+@states({ type: provider['type'], kind: provider['kind'], models: provider['models'], probe: [], message: '', error: '', busy: false })
+
+<template>
+@extends(__layout__ + 'base')
+@section('meta:title', 'Provider · Quản trị Gehihi')
+@block('content')
+<header class="adm-page-head">
+    <div><a class="adm-back" href="/admin/providers"><svg class="i" aria-hidden="true"><use href="#i-arrow-left"></use></svg>Provider hệ thống</a><h1>{{ provider['id'] ? provider['name'] : 'Thêm provider' }}</h1><p class="muted">Provider hệ thống phục vụ cả khách chưa đăng nhập. Key được mã hóa ở máy chủ và không gửi lại trình duyệt.</p></div>
+</header>
+<form class="adm-card adm-form" @submit(save(event))>
+    <div class="two-columns">
+        <label>Tên hiển thị<input name="name" required maxlength="100" value="{{ provider['name'] }}"></label>
+        <label>Nhà cung cấp<select name="type" @change(changeType(event))>@foreach(types as t)<option value="{{ t['value'] }}" selected="{{ type == t['value'] }}">{{ t['label'] }}</option>@endforeach</select></label>
+    </div>
+    <label>Base URL <small>Để trống để dùng địa chỉ mặc định của nhà cung cấp.</small><input name="base_url" maxlength="400" value="{{ provider['base_url'] }}" placeholder="https://…"></label>
+    <label>API keys <small>{{ provider['keys_hint'] }}</small><textarea name="api_keys" rows="2" autocomplete="off" spellcheck="false" placeholder="API key"></textarea></label>
+    @if(kind === 'llm')
+    <label>Model được phép dùng <small>Mỗi model ID một dòng, hoặc bấm “Tải model”.</small><textarea name="models" rows="4" @bind(models)></textarea></label>
+    <label>Model mặc định<input name="default_model" maxlength="200" value="{{ provider['default_model'] }}" placeholder="Để trống để dùng model đầu tiên"></label>
+    <div class="two-columns">
+        <label>Model nhận ảnh<textarea name="vision_models" rows="2" placeholder="Chỉ model ID đã xác nhận nhận ảnh">{{ provider['vision_models'] }}</textarea></label>
+        <label>Model suy luận<textarea name="reasoning_models" rows="2" placeholder="Chỉ model ID hỗ trợ suy luận">{{ provider['reasoning_models'] }}</textarea></label>
+    </div>
+    @endif
+    <div class="checkboxes">
+        <label><input type="checkbox" name="enabled" checked="{{ provider['enabled'] }}">Bật provider</label>
+        <label><input type="checkbox" name="is_default" checked="{{ provider['is_default'] }}">Ưu tiên mặc định</label>
+        @if(provider['key_count'])<label><input type="checkbox" name="clear_keys">Xóa key đã lưu</label>@endif
+    </div>
+    @if(message)<p class="probe-results">{{ message }}</p>@endif
+    @if(probe.length)
+    <div class="probe-results">
+        @foreach(probe as r)
+        @key(r['key'])
+        <p @class({'test-ok': r['ok'], 'test-error': !r['ok']})>{{ r['text'] }}</p>
+        @endforeach
+    </div>
+    @endif
+    @if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
+    <div class="form-footer">
+        @if(kind === 'llm')<button type="button" class="small-button" @disabled(busy) @click(check(event, 'discover'))>Tải model</button>@endif
+        <button type="button" class="small-button" @disabled(busy) @click(check(event, 'test'))>Kiểm tra key</button>
+        <button class="primary-button" @disabled(busy)>{{ busy ? 'Đang xử lý…' : 'Lưu provider' }}</button>
+    </div>
+</form>
+@endblock
+</template>
+
+<script setup lang="ts">
+    import { App } from '@saolabs/client';
+    import { formValues, send } from '@admin/app/services/AdminHttp';
+
+    function changeType(event: Event) {
+        const value = (event.target as HTMLSelectElement).value;
+        setType(value);
+        setKind(types.find((t: any) => t.value === value)?.kind || 'llm');
+    }
+
+    async function run(task: () => Promise<void>) {
+        setBusy(true);
+        setError('');
+        try { await task(); } catch (e: any) { setError(e.message); } finally { setBusy(false); }
+    }
+
+    function payload(form: HTMLFormElement) {
+        return { ...formValues(form), id: provider.id };
+    }
+
+    function check(event: Event, action: string) {
+        const form = (event.currentTarget as HTMLElement).closest('form') as HTMLFormElement;
+        setProbe([]);
+        setMessage('');
+        return run(async () => {
+            const data = await send('post', '/admin/providers/' + action, payload(form));
+            if (action === 'discover') {
+                const merged = Array.from(new Set([...models.split(/[\n,]+/).map((m: string) => m.trim()).filter(Boolean), ...data.models]));
+                setModels(merged.join('\n'));
+                setMessage('Đã tải ' + data.models.length + ' model. Bấm “Lưu provider” để lưu.');
+            } else {
+                setProbe(data.results.map((r: any) => ({ key: r.key, ok: r.ok, text: 'Key ' + r.key + ' · ' + (r.ok ? 'OK · ' + r.latency_ms + ' ms' : r.message) })));
+            }
+        });
+    }
+
+    function save(event: Event) {
+        event.preventDefault();
+        const form = event.currentTarget as HTMLFormElement;
+        return run(async () => {
+            await send(provider.id ? 'put' : 'post', '/admin/providers' + (provider.id ? '/' + provider.id : ''), payload(form));
+            // Trang form nằm lại trong PageCache: xóa dấu vết lượt này để lần mở sau không thấy dữ liệu cũ.
+            setProbe([]);
+            setMessage('');
+            if (!provider.id) { form.reset(); setModels(''); }
+            App.Router.navigate('/admin/providers');
+        });
+    }
+</script>

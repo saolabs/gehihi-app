@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Admin\Services;
+namespace App\Modules\AiRuntime\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +16,34 @@ class Limits
         'research.deep.queries' => [1, 50], 'research.deep.pages' => [0, 100], 'research.deep.rounds' => [1, 10], 'research.deep.seconds' => [30, 1800],
     ];
 
+    public const GROUPS = [
+        'Mỗi workspace trong ngày' => [['daily_runs', 'Số lượt', 'lượt'], ['daily_tokens', 'Token', 'token'], ['concurrency', 'Lượt chạy đồng thời', 'lượt']],
+        'Ngân sách mỗi lượt' => [['chat_tokens', 'Token cho chat', 'token'], ['research_tokens', 'Token cho Research', 'token']],
+        'Tra cứu web' => [['research.quick.queries', 'Truy vấn', 'truy vấn'], ['research.quick.pages', 'Trang đọc', 'trang'], ['research.quick.rounds', 'Vòng', 'vòng'], ['research.quick.seconds', 'Thời gian tối đa', 'giây']],
+        'Nghiên cứu sâu' => [['research.deep.queries', 'Truy vấn', 'truy vấn'], ['research.deep.pages', 'Trang đọc', 'trang'], ['research.deep.rounds', 'Vòng', 'vòng'], ['research.deep.seconds', 'Thời gian tối đa', 'giây']],
+        'Khách chưa đăng nhập' => [['guest_days', 'Thời hạn lưu dữ liệu', 'ngày']],
+    ];
+
     private static ?array $defaults = null;
+
+    /** Tên ô form: 'research.deep.pages' → 'research_deep_pages' để validator không hiểu thành mảng lồng. */
+    public static function field(string $key): string
+    {
+        return str_replace('.', '_', $key);
+    }
+
+    public static function groups(): array
+    {
+        $current = self::current();
+        $defaults = self::defaults();
+        $groups = [];
+        foreach (self::GROUPS as $title => $fields) {
+            $groups[] = ['id' => 'g'.count($groups), 'title' => $title, 'fields' => array_map(fn ($f) => ['key' => self::field($f[0]), 'label' => $f[1], 'unit' => $f[2], 'value' => $current[$f[0]], 'default' => $defaults[$f[0]],
+                'changed' => $current[$f[0]] !== $defaults[$f[0]], 'hint' => 'Mặc định '.number_format($defaults[$f[0]], 0, ',', '.'), 'min' => self::FIELDS[$f[0]][0], 'max' => self::FIELDS[$f[0]][1]], $fields)];
+        }
+
+        return $groups;
+    }
 
     public static function overrides(): array
     {

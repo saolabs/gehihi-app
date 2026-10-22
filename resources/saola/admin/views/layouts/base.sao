@@ -1,5 +1,63 @@
+@states({ section: '', mobileNav: false, me: null })
+
 <template>
 @pageStart
-@useBlock('content')
+<div class="app-shell adm-shell {{ mobileNav ? 'nav-open' : '' }}">
+    <aside class="sidebar" aria-label="Điều hướng quản trị">
+        <div class="sidebar-head">
+            <a href="/admin" class="brand"><img src="/assets/img/gehihi-mark.svg" width="30" height="30" alt=""><span>Gehihi</span><span class="adm-badge">Admin</span></a>
+            <button class="icon-button sidebar-close" aria-label="Đóng thanh bên" @click(setMobileNav(false))><svg class="i" aria-hidden="true"><use href="#i-x"></use></svg></button>
+        </div>
+        <nav class="adm-nav">
+            <a href="/admin" @class({'nav-item': true, 'active': section === 'dashboard'})><svg class="i" aria-hidden="true"><use href="#i-chart"></use></svg><span>Tổng quan</span></a>
+            <a href="/admin/providers" @class({'nav-item': true, 'active': section === 'providers'})><svg class="i" aria-hidden="true"><use href="#i-plug"></use></svg><span>Provider</span></a>
+            <a href="/admin/users" @class({'nav-item': true, 'active': section === 'users'})><svg class="i" aria-hidden="true"><use href="#i-users"></use></svg><span>Người dùng</span></a>
+            <a href="/admin/limits" @class({'nav-item': true, 'active': section === 'limits'})><svg class="i" aria-hidden="true"><use href="#i-gauge"></use></svg><span>Hạn mức</span></a>
+        </nav>
+        <span class="spacer"></span>
+        <a href="/" data-nav="false" class="nav-item"><svg class="i" aria-hidden="true"><use href="#i-arrow-left"></use></svg><span>Về trang trò chuyện</span></a>
+        @if(me)
+        <div class="profile-row"><span class="avatar">{{ me['initial'] }}</span><span class="profile-text"><strong>{{ me['name'] }}</strong><small>{{ me['email'] }}</small></span></div>
+        @endif
+    </aside>
+    @if(mobileNav)<div class="sidebar-scrim" @click(setMobileNav(false))></div>@endif
+    <main class="main-panel">
+        <header class="topbar adm-topbar">
+            <button class="icon-button mobile-toggle" aria-label="Mở thanh bên" @click(setMobileNav(true))><svg class="i" aria-hidden="true"><use href="#i-menu"></use></svg></button>
+            <a href="/admin" class="brand topbar-brand"><img src="/assets/img/gehihi-mark.svg" width="26" height="26" alt=""><span>Quản trị</span></a>
+        </header>
+        <div class="adm-scroll">
+            <div class="adm-content">
+                @useBlock('content')
+            </div>
+        </div>
+    </main>
+</div>
 @pageEnd
 </template>
+
+<script setup lang="ts">
+    import { App } from '@saolabs/client';
+
+    let offNav = null as (() => void) | null;
+
+    // Layout được tái dùng khi chuyển trang trong context admin: chỉ outlet đổi, nên nghe router để cập nhật mục đang mở.
+    function started() {
+        const me = App.shared('admin', null) as any;
+        setMe(me);
+        const theme = me?.theme || 'system';
+        document.documentElement.dataset.theme = theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
+        offNav = App.Router.afterEach(() => sync());
+        sync();
+    }
+
+    function resumed() { sync(); }
+
+    function destroyed() { if (offNav) { offNav(); offNav = null; } }
+
+    function sync() {
+        setSection(location.pathname.replace(/^\/admin\/?/, '').split('/')[0] || 'dashboard');
+        setMobileNav(false);
+        document.querySelector('.adm-scroll')?.scrollTo(0, 0);
+    }
+</script>

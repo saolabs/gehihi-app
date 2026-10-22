@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Workspace\Http;
+namespace App\Modules\Workspace\Http\Controllers\Api;
 
 use App\Http\Controllers\ApiController;
 use App\Modules\Workspace\Services\FileService;

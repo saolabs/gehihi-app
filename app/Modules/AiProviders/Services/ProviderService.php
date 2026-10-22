@@ -4,11 +4,27 @@ namespace App\Modules\AiProviders\Services;
 
 use App\Modules\AiProviders\Models\Provider;
 use App\Modules\AiProviders\Repositories\ProviderRepositoryInterface;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ProviderService
 {
     public function __construct(private ProviderRepositoryInterface $repo, private OutboundHttp $http) {}
+
+    /** Luật kiểm tra form provider, dùng chung cho cài đặt cá nhân và trang quản trị. */
+    public static function rules(): array
+    {
+        return ['name' => ['required', 'string', 'max:100'], 'type' => ['required', Rule::in(array_keys(ProviderCatalog::TYPES))], 'base_url' => ['nullable', 'string', 'max:400'], 'api_keys' => ['nullable', 'string', 'max:16000'], 'clear_keys' => ['sometimes', 'boolean'], 'models' => ['nullable', 'string', 'max:20000'], 'default_model' => ['nullable', 'string', 'max:200'], 'enabled' => ['sometimes', 'boolean'], 'is_default' => ['sometimes', 'boolean'], 'vision_models' => ['nullable', 'string', 'max:20000'], 'reasoning_models' => ['nullable', 'string', 'max:20000'], 'vision' => ['sometimes', 'boolean'], 'reasoning' => ['sometimes', 'boolean']];
+    }
+
+    /** Dữ liệu điền sẵn cho form sửa: danh sách model dạng một-dòng-một-ID, không bao giờ kèm key. */
+    public function form(Provider $p): array
+    {
+        $has = fn (string $cap) => array_values(array_filter($p->models ?? [], fn ($id) => $p->capabilities['models'][$id][$cap] ?? $p->capabilities[$cap] ?? false));
+
+        return ['id' => $p->id, 'name' => $p->name, 'type' => $p->type, 'kind' => $p->kind, 'base_url' => $p->base_url, 'models' => implode("\n", $p->models ?? []), 'default_model' => $p->default_model,
+            'vision_models' => implode("\n", $has('vision')), 'reasoning_models' => implode("\n", $has('reasoning')), 'enabled' => $p->enabled, 'is_default' => $p->is_default, 'key_count' => count($p->secrets ?? [])];
+    }
 
     public function catalog(?string $userId): array
     {

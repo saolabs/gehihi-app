@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Identity\Http;
+namespace App\Modules\Identity\Http\Middleware;
 
 use App\Modules\Identity\Repositories\IdentityRepositoryInterface;
 use Closure;

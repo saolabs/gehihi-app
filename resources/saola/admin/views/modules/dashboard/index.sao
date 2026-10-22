@@ -1,0 +1,62 @@
+@vars(days = 30, stats = [], active = 0, conversations = '0', peak = '1', bars = [], modes = [], models = [], failures = [])
+@await
+
+<template>
+@extends(__layout__ + 'base')
+@section('meta:title', 'Tổng quan · Quản trị Gehihi')
+@block('content')
+<header class="adm-page-head">
+    <div><h1>Tổng quan</h1><p class="muted">{{ active }} lượt đang chạy · {{ conversations }} hội thoại đã lưu</p></div>
+    <nav class="mode-tabs" aria-label="Khoảng thời gian">
+        <a href="/admin?days=7" @class({'active': days === 7})>7 ngày</a>
+        <a href="/admin?days=30" @class({'active': days === 30})>30 ngày</a>
+        <a href="/admin?days=90" @class({'active': days === 90})>90 ngày</a>
+    </nav>
+</header>
+<section class="adm-stats">
+    @foreach(stats as stat)
+    @key(stat['id'])
+    <div @class({'adm-card': true, 'adm-stat': true, 'warn': stat['warn']})><span class="adm-stat-label"><svg class="i" aria-hidden="true"><use href="{{ stat['icon'] }}"></use></svg>{{ stat['label'] }}</span><strong>{{ stat['value'] }}</strong><small>{{ stat['hint'] }}</small></div>
+    @endforeach
+</section>
+<section class="adm-card">
+    <div class="adm-card-head"><h2>Lượt chạy theo ngày</h2><span class="muted">Rê chuột vào cột để xem chi tiết</span></div>
+    <div class="adm-chart" role="img" aria-label="Biểu đồ số lượt chạy mỗi ngày, cao nhất {{ peak }} lượt">
+        <span class="adm-chart-max">{{ peak }}</span>
+        <div class="adm-bars">
+            @foreach(bars as bar)
+            @key(bar['key'])
+            <div class="adm-bar" tabindex="0" data-tip="{{ bar['tip'] }}" aria-label="{{ bar['tip'] }}"><i style="height: {{ bar['height'] }}%"></i><span>{{ bar['tick'] }}</span></div>
+            @endforeach
+        </div>
+    </div>
+</section>
+<div class="adm-grid">
+    <section class="adm-card">
+        <div class="adm-card-head"><h2>Theo chế độ</h2></div>
+        @foreach(modes as mode)
+        @key(mode['mode'])
+        <div class="adm-meter"><div class="adm-meter-row"><span>{{ mode['label'] }}</span><strong>{{ mode['count'] }}</strong></div><div class="adm-meter-track"><i style="width: {{ mode['pct'] }}%"></i></div></div>
+        @endforeach
+    </section>
+    <section class="adm-card">
+        <div class="adm-card-head"><h2>Model dùng nhiều</h2></div>
+        @foreach(models as model)
+        @key(model['id'])
+        <div class="adm-meter"><div class="adm-meter-row"><span>{{ model['name'] }}</span><strong>{{ model['count'] }} <small class="muted">· {{ model['tokens'] }} token</small></strong></div><div class="adm-meter-track"><i style="width: {{ model['pct'] }}%"></i></div></div>
+        @endforeach
+        @if(models.length === 0)<p class="muted-caption">Chưa có lượt chạy nào trong khoảng này.</p>@endif
+    </section>
+</div>
+<section class="adm-card">
+    <div class="adm-card-head"><h2>Lỗi gần đây</h2></div>
+    @if(failures.length === 0)<p class="muted-caption">Không có lượt lỗi nào trong khoảng này.</p>@endif
+    <div class="adm-list">
+        @foreach(failures as failure)
+        @key(failure['id'])
+        <div class="adm-list-row"><svg class="i danger-ink" aria-hidden="true"><use href="#i-alert"></use></svg><div><strong>{{ failure['error'] }}</strong><small>{{ failure['meta'] }}</small></div></div>
+        @endforeach
+    </div>
+</section>
+@endblock
+</template>

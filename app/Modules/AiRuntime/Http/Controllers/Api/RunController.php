@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\AiRuntime\Http;
+namespace App\Modules\AiRuntime\Http\Controllers\Api;
 
 use App\Http\Controllers\ApiController;
 use App\Modules\AiRuntime\Services\RunService;
