@@ -30,7 +30,7 @@ class ProviderHealth
                     'keys' => $cooling ? "$keys ($cooling tạm khóa)" : (string) $keys, 'models' => $p->kind === 'search' ? '—' : (string) count($p->models ?? []),
                     'runs' => Format::num($used->count()), 'fail_rate' => $used->count() ? Format::percent($failed, $used->count()) : '—',
                     'tested' => $p->tested_at ? ($p->test_status ?: 'Đã kiểm tra').' · '.Format::when($p->tested_at) : 'Chưa kiểm tra'];
-            })->map(fn ($row) => [...$row, 'key' => Format::rowKey($row)])->values()->all(),
+            })->values()->all(),
             'personal_users' => Provider::whereNotNull('user_id')->distinct()->count('user_id'),
             'personal_providers' => Provider::whereNotNull('user_id')->count(),
         ];

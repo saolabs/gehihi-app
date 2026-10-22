@@ -1,5 +1,6 @@
 @vars(provider = {}, types = [])
 @await
+@cache(false)
 @states({ type: provider['type'], kind: provider['kind'], models: provider['models'], probe: [], message: '', error: '', busy: false })
 
 <template>
@@ -89,10 +90,6 @@
         const form = event.currentTarget as HTMLFormElement;
         return run(async () => {
             await send(provider.id ? 'put' : 'post', '/admin/providers' + (provider.id ? '/' + provider.id : ''), payload(form));
-            // Trang form nằm lại trong PageCache: xóa dấu vết lượt này để lần mở sau không thấy dữ liệu cũ.
-            setProbe([]);
-            setMessage('');
-            if (!provider.id) { form.reset(); setModels(''); }
             App.Router.navigate('/admin/providers');
         });
     }

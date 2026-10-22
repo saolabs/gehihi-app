@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "5cd8b79192dccb348ba1f1e56b33cb16",
+    "content-hash": "407a50cb794931a697f75e35790623be",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -3440,16 +3440,16 @@
         },
         {
             "name": "saola/compiler",
-            "version": "v2.0.0",
+            "version": "v2.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/saolabs/compiler.git",
-                "reference": "6ae2fb08df29df303ed6524c7044a04098fbbc79"
+                "reference": "2c1f4f48ae38cb3954f9d7c6f27c68ffb64f7e90"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/saolabs/compiler/zipball/6ae2fb08df29df303ed6524c7044a04098fbbc79",
-                "reference": "6ae2fb08df29df303ed6524c7044a04098fbbc79",
+                "url": "https://api.github.com/repos/saolabs/compiler/zipball/2c1f4f48ae38cb3954f9d7c6f27c68ffb64f7e90",
+                "reference": "2c1f4f48ae38cb3954f9d7c6f27c68ffb64f7e90",
                 "shasum": ""
             },
             "require": {
@@ -3499,22 +3499,22 @@
             ],
             "support": {
                 "issues": "https://github.com/saolabs/compiler/issues",
-                "source": "https://github.com/saolabs/compiler/tree/v2.0.0"
+                "source": "https://github.com/saolabs/compiler/tree/v2.1.0"
             },
-            "time": "2026-10-21T15:13:27+00:00"
+            "time": "2026-10-22T14:34:28+00:00"
         },
         {
             "name": "saola/core",
-            "version": "v2.2.0",
+            "version": "v2.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/saolabs/core.git",
-                "reference": "835de34452cf0b90b958690b99d3b2f23ed82853"
+                "reference": "6d1d4c0337ee4904ab57cc3f6771b31939a97920"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/saolabs/core/zipball/835de34452cf0b90b958690b99d3b2f23ed82853",
-                "reference": "835de34452cf0b90b958690b99d3b2f23ed82853",
+                "url": "https://api.github.com/repos/saolabs/core/zipball/6d1d4c0337ee4904ab57cc3f6771b31939a97920",
+                "reference": "6d1d4c0337ee4904ab57cc3f6771b31939a97920",
                 "shasum": ""
             },
             "require": {
@@ -3566,9 +3566,9 @@
             "description": "Saola — Laravel Core Library for building reactive full-stack applications",
             "support": {
                 "issues": "https://github.com/saolabs/core/issues",
-                "source": "https://github.com/saolabs/core/tree/v2.2.0"
+                "source": "https://github.com/saolabs/core/tree/v2.3.0"
             },
-            "time": "2026-10-21T15:13:26+00:00"
+            "time": "2026-10-22T14:34:33+00:00"
         },
         {
             "name": "saola/permission",
@@ -9703,5 +9703,5 @@
         "php": "^8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }

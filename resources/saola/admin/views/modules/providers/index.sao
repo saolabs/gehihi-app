@@ -17,7 +17,7 @@
             <thead><tr><th>Provider</th><th>Trạng thái</th><th>Key</th><th>Model</th><th>Lượt 7 ngày</th><th>Tỉ lệ lỗi</th><th>Kiểm tra</th><th><span class="sr-only">Thao tác</span></th></tr></thead>
             <tbody>
                 @foreach(list as p)
-                @key(p['key'])
+                @key(p['id'])
                 <tr>
                     <td><a class="adm-row-link" href="/admin/providers/{{ p['id'] }}"><strong>{{ p['name'] }}</strong></a><small>{{ p['kind_label'] }} · {{ p['type_label'] }}{{ p['is_default'] ? ' · mặc định' : '' }}</small></td>
                     <td><span class="adm-status {{ p['status'] }}"><i></i>{{ p['status_label'] }}</span></td>

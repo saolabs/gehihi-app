@@ -32,13 +32,4 @@ class Format
     {
         return $total ? rtrim(rtrim(number_format($part / $total * 100, 1, ',', ''), '0'), ',').'%' : '0%';
     }
-
-    /**
-     * Khóa @foreach theo nội dung hàng. @key giữ nguyên DOM của hàng khi khóa không đổi và không vẽ lại
-     * nội dung, nên khóa theo id làm hàng vừa sửa vẫn hiện dữ liệu cũ sau khi setState.
-     */
-    public static function rowKey(array $row): string
-    {
-        return substr(md5(json_encode($row)), 0, 12);
-    }
 }

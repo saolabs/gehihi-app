@@ -14,8 +14,8 @@
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.1",
         "laravel/tinker": "^3.0",
-        "saola/compiler": "^2.0",
-        "saola/core": "^2.2",
+        "saola/compiler": "^2.1",
+        "saola/core": "^2.3",
         "saola/permission": "^0.2"
     },
     "require-dev": {

@@ -27,6 +27,6 @@ class UserDirectory
 
             return ['id' => $u->id, 'name' => $u->name, 'email' => $u->email, 'initial' => mb_strtoupper(mb_substr($u->name, 0, 1)), 'is_admin' => $u->is_admin, 'is_me' => $u->id === $me,
                 'joined' => Format::when($u->created_at), 'conversations' => Format::num($conversations[$ws] ?? 0), 'runs' => Format::num($mine->count()), 'tokens' => Format::num($mine->sum('used_tokens'))];
-        })->map(fn ($row) => [...$row, 'key' => Format::rowKey($row)])->values()->all();
+        })->values()->all();
     }
 }

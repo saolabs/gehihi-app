@@ -18,7 +18,7 @@
             <thead><tr><th>Người dùng</th><th>Tham gia</th><th>Hội thoại</th><th>Lượt 30 ngày</th><th>Token 30 ngày</th><th>Quyền</th></tr></thead>
             <tbody>
                 @foreach(list as u)
-                @key(u['key'])
+                @key(u['id'])
                 <tr>
                     <td><div class="adm-user"><span class="avatar">{{ u['initial'] }}</span><div><strong>{{ u['name'] }}{{ u['is_me'] ? ' (bạn)' : '' }}</strong><small>{{ u['email'] }}</small></div></div></td>
                     <td>{{ u['joined'] }}</td><td>{{ u['conversations'] }}</td><td>{{ u['runs'] }}</td><td>{{ u['tokens'] }}</td>

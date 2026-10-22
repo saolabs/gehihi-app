@@ -33,7 +33,7 @@
         "vitest": "^4.1.11"
     },
     "dependencies": {
-        "@saolabs/client": "1.1.0",
+        "@saolabs/client": "1.2.1",
         "axios": "^1.11.0",
         "dompurify": "^3.4.17",
         "marked": "^18.1.1"
