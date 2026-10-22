@@ -1,0 +1,46 @@
+{
+    "$schema": "https://json.schemastore.org/package.json",
+    "name": "gehihi-app",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "npm run build:web",
+        "build:web": "npm run check && VITE_CONTEXT=web vite build",
+        "build:all": "npm run check && VITE_CONTEXT=web vite build && VITE_CONTEXT=admin vite build",
+        "dev": "npm run dev:web",
+        "dev:container": "VITE_CONTEXT=web concurrently -k -n server,vite -c yellow,cyan \"npm:dev:server\" \"vite\"",
+        "dev:web": "VITE_CONTEXT=web concurrently -k -n server,vite -c yellow,cyan \"npm:dev:server\" \"vite\"",
+        "dev:server": "php artisan serve --host=${DEV_HOST:-127.0.0.1} --port=${DEV_PORT:-8010} --no-reload",
+        "build:views": "sao-compile all",
+        "build:views:web": "sao-compile web",
+        "dev:views": "sao-compile all --watch",
+        "typecheck": "tsc --noEmit",
+        "check": "npm run build:views && npm run typecheck",
+        "build:admin": "npm run check && VITE_CONTEXT=admin vite build",
+        "build:views:admin": "sao-compile admin",
+        "test:ui": "vitest run --config tests/frontend/vitest.config.mjs"
+    },
+    "devDependencies": {
+        "@emnapi/wasi-threads": "^1.2.3",
+        "@saolabs/builder": "1.1.0",
+        "@tailwindcss/vite": "^4.0.0",
+        "concurrently": "^9.2.3",
+        "jsdom": "^25.0.1",
+        "laravel-vite-plugin": "^1.2.0",
+        "tailwindcss": "^4.0.0",
+        "typescript": "^5.9.3",
+        "vite": "^6.4.0",
+        "vitest": "^4.1.11"
+    },
+    "dependencies": {
+        "@saolabs/client": "1.1.0",
+        "axios": "^1.11.0",
+        "dompurify": "^3.4.17",
+        "marked": "^18.1.1"
+    },
+    "optionalDependencies": {
+        "@rollup/rollup-darwin-arm64": "^4.63.3",
+        "@rollup/rollup-linux-arm64-gnu": "^4.63.3",
+        "@rollup/rollup-linux-x64-gnu": "^4.63.3"
+    }
+}

@@ -1,0 +1,5 @@
+<template>
+@pageStart
+@useBlock('content')
+@pageEnd
+</template>
