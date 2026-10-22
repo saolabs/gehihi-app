@@ -16,7 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [WorkspaceSession::class]);
         $middleware->alias(['next' => Next::class]);
-        $middleware->redirectGuestsTo('/');
+        $middleware->redirectGuestsTo(fn ($request) => '/?login=1&next='.urlencode('/'.$request->path()));
     })->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['api_key', 'api_keys', 'password', 'password_confirmation']);
         $exceptions->render(function (Throwable $e, $request) {

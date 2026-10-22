@@ -78,6 +78,13 @@ class ProviderRepository implements ProviderRepositoryInterface
         }
     }
 
+    public function coolingKeys(Provider $provider): int
+    {
+        $prints = array_map(fn ($key) => $this->fingerprint($provider, $key), $provider->secrets ?? []);
+
+        return $prints ? DB::table('provider_key_health')->whereIn('fingerprint', $prints)->where('cooldown_until', '>', now())->count() : 0;
+    }
+
     private function fingerprint(Provider $p, string $key): string
     {
         return hash_hmac('sha256',$p->id.':'.$key,config('app.key'));

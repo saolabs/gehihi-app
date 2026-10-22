@@ -1,105 +1,44 @@
 <script setup lang="ts">
-import { GehihiClient } from '@web/app/services/GehihiClient';
-import { renderMarkdown } from '@web/app/services/Markdown';
-@state(vm: any = { temporary: false, history: [], availableFiles: [], typeOptions: [], loading: true, busy: false, locale: 'vi', theme: 'system', error: '', notice: '', workspace: {}, user: null, projects: [], conversations: [], files: [], catalog: [], models: [], providers: [], providerTypes: {}, conversation: null, project: null, visibleMessages: [], run: null, mode: 'chat', thinking: 'auto', selectedModel: '', searchProvider: '', selectedFiles: [], modal: '', editProvider: {}, editProject: {}, systemProviders: false, probe: null, search: '', archived: false, mobileNav: false, usage: {}, sourcePanel: false, advanced: false, fallbacks: [], includeDomains: '', excludeDomains: '', language: 'vi', country: 'vn', import_available: false, resetToken: '', resetEmail: '' })
-@state(prompt: string = '')
-let client: GehihiClient;
-function mounted() { client = new GehihiClient(setVm); client.load(); }
+import { AdminClient } from '@admin/app/services/AdminClient';
+@state(vm: any = { tab: 'overview', loading: true, busy: false, error: '', notice: '', me: null, days: 30, overview: null, providers: null, users: [], q: '', limits: [], mobileNav: false })
+let client: AdminClient;
+function mounted() { client = new AdminClient(setVm); client.load(); }
 function unmounted() { client?.destroy(); }
-function ghText(locale: string, vi: string, en: string) { return locale === 'en' ? en : vi; }
-function authTitle(locale: string, modal: string) { if (modal === 'register') return ghText(locale, 'Chào mừng đến với Gehihi', 'Welcome to Gehihi'); if (modal === 'forgot' || modal === 'reset') return ghText(locale, 'Khôi phục tài khoản', 'Recover your account'); return ghText(locale, 'Tiếp nối những ý tưởng', 'Pick up where you left off'); }
-function hasSources(run: any) { return !!run?.sources?.length; }
-function conversationTitle(conversation: any) { return conversation?.title || ''; }
-function initial(name: string) { return name.charAt(0).toUpperCase(); }
-function kilobytes(size: number) { return Math.ceil(size / 1024); }
-function probeLabel(result: any) { return result.key ? `Key ${result.key} · ` : ''; }
-function probeResult(result: any) { return result.ok ? `✓ ${result.text} · ${result.latency_ms} ms` : result.message; }
-function md(value: string) { return renderMarkdown(value); }
 function value(event: Event) { return (event.target as HTMLInputElement).value; }
-function patch(key: string, event: Event) { client.patch({ [key]: value(event) }); }
-async function send(event: Event) { event.preventDefault(); if (await client.send(prompt)) setPrompt(''); }
-function keydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') client?.close();
-    if (event.key === 'Tab' && vm.modal) {
-        const items = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"] button:not([disabled]), [role="dialog"] input, [role="dialog"] textarea, [role="dialog"] select, [role="dialog"] a'));
-        const first = items[0], last = items[items.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-    }
-}
-function composerKey(event: KeyboardEvent) { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); send(event); } }
-function sample(text: string, mode: string) { setPrompt(text); client.patch({ mode }); document.getElementById('prompt')?.focus(); }
-function editMessage(message: any) { setPrompt(message.content); client.patch({ conversation: { ...vm.conversation, selected_leaf_id: message.parent_id } }); document.getElementById('prompt')?.focus(); }
-function historyItems() { return client ? client.historyItems() : []; }
-function availableFiles() { return client ? client.availableFiles() : []; }
-function siblings(message: any) { return client.siblings(message); }
-function providerType(event: Event) { const type = value(event); const form = (event.target as HTMLElement).closest('form') as HTMLFormElement; const data = client.providerData(form); client.patch({ editProvider: { ...vm.editProvider, ...data, type, base_url: vm.providerTypes[type]?.base || '' } }); }
 </script>
 @await
 <template>
 @extends(__layout__ + "base")
-@section('meta:title', 'Gehihi · Không gian cho những ý tưởng')
+@section('meta:title', 'Quản trị · Gehihi')
 @block('content')
-<div class="app-shell {{ vm['conversation'] ? 'is-conversation' : 'is-welcome' }} {{ vm['mobileNav'] ? 'nav-open' : '' }}" @keydown(keydown(event))>
-    <aside class="sidebar" aria-label="Điều hướng">
+<div class="app-shell adm-shell {{ vm['mobileNav'] ? 'nav-open' : '' }}">
+    <aside class="sidebar" aria-label="Điều hướng quản trị">
         <div class="sidebar-head">
-            <a href="/" class="brand" data-nav="false"><img src="/assets/img/gehihi-mark.svg" width="30" height="30" alt=""><span>Gehihi</span></a>
+            <a href="/admin" class="brand" data-nav="false"><img src="/assets/img/gehihi-mark.svg" width="30" height="30" alt=""><span>Gehihi</span><span class="adm-badge">Admin</span></a>
             <button class="icon-button sidebar-close" aria-label="Đóng thanh bên" @click(client.patch({ mobileNav: false }))><svg class="i" aria-hidden="true"><use href="#i-x"></use></svg></button>
         </div>
-        <button class="new-chat" @click(client.newChat())><svg class="i" aria-hidden="true"><use href="#i-compose"></use></svg><span>{{ ghText(vm['locale'],'Cuộc trò chuyện mới','New conversation') }}</span></button>
-        <label class="search-box"><svg class="i" aria-hidden="true"><use href="#i-search"></use></svg><input aria-label="Tìm hội thoại" type="search" placeholder="{{ ghText(vm['locale'],'Tìm cuộc trò chuyện…','Search conversations…') }}" value="{{ vm['search'] }}" @change(client.search(value(event)))></label>
-        <div class="sidebar-scroll">
-            <div class="nav-section-title"><span>{{ ghText(vm['locale'],'Dự án','Projects') }}</span><button class="icon-button small" aria-label="Tạo dự án" title="{{ ghText(vm['locale'],'Tạo dự án','New project') }}" @click(client.patch({ modal: 'project', editProject: {} }))><svg class="i" aria-hidden="true"><use href="#i-plus"></use></svg></button></div>
-            <nav class="projects-list">
-                @foreach(vm['projects'] as p)
-                @key(p.id)
-                @if(!p.archived)
-                <button class="nav-item {{ (vm['project'] ? vm['project']['id'] : null) === p.id ? 'active' : '' }}" @click(client.showProject(p))><svg class="i" aria-hidden="true"><use href="#i-folder"></use></svg><span>{{ p.name }}</span></button>
-                @endif
-                @endforeach
-                @if(vm['projects'].length === 0)
-                <button class="empty-project" @click(client.patch({ modal: 'project', editProject: {} }))><svg class="i" aria-hidden="true"><use href="#i-folder"></use></svg><span>{{ ghText(vm['locale'],'Tạo dự án đầu tiên','Create your first project') }}<small>{{ ghText(vm['locale'],'Gom hội thoại, tệp và hướng dẫn chung','Group chats, files and instructions') }}</small></span></button>
-                @endif
-            </nav>
-            <div class="nav-section-title"><span>{{ vm['archived'] ? ghText(vm['locale'],'Đã lưu trữ','Archived') : ghText(vm['locale'],'Gần đây','Recent') }}</span><button class="icon-button small {{ vm['archived'] ? 'active' : '' }}" aria-pressed="{{ vm['archived'] ? 'true' : 'false' }}" title="{{ vm['archived'] ? ghText(vm['locale'],'Quay lại gần đây','Back to recent') : ghText(vm['locale'],'Xem đã lưu trữ','Show archived') }}" @click(client.patch({ archived: !vm['archived'] }))><svg class="i" aria-hidden="true"><use href="#i-archive"></use></svg></button></div>
-            <nav class="history-list" aria-label="Các cuộc trò chuyện">
-                @foreach(vm['history'] as c)
-                @key(c.id)
-                <button class="history-item {{ (vm['conversation'] ? vm['conversation']['id'] : null) === c.id ? 'selected' : '' }}" @click(client.open(c.id))>@if(c.pinned)<svg class="i pin" aria-hidden="true"><use href="#i-pin"></use></svg>@endif<span>{{ c.title }}</span></button>
-                @endforeach
-                @if(vm['conversations'].length === 0)
-                <p class="muted-caption">{{ ghText(vm['locale'],'Chưa có cuộc trò chuyện nào.','No conversations yet.') }}</p>
-                @endif
-            </nav>
-        </div>
-        <button class="profile-row" @click(client.settings())><span class="avatar">{{ vm['user'] ? initial(vm['user']['name']) : 'K' }}</span><span class="profile-text"><strong>{{ vm['user'] ? vm['user']['name'] : ghText(vm['locale'],'Khách','Guest') }}</strong><small>{{ vm['user'] ? vm['user']['email'] : ghText(vm['locale'],'Đăng nhập để lưu lâu dài','Sign in to keep your data') }}</small></span><svg class="i" aria-hidden="true"><use href="#i-settings"></use></svg></button>
+        <nav class="adm-nav">
+            <button class="nav-item {{ vm['tab'] === 'overview' ? 'active' : '' }}" aria-current="{{ vm['tab'] === 'overview' ? 'page' : 'false' }}" @click(client.go('overview'))><svg class="i" aria-hidden="true"><use href="#i-chart"></use></svg><span>Tổng quan</span></button>
+            <button class="nav-item {{ vm['tab'] === 'providers' ? 'active' : '' }}" aria-current="{{ vm['tab'] === 'providers' ? 'page' : 'false' }}" @click(client.go('providers'))><svg class="i" aria-hidden="true"><use href="#i-plug"></use></svg><span>Provider</span></button>
+            <button class="nav-item {{ vm['tab'] === 'users' ? 'active' : '' }}" aria-current="{{ vm['tab'] === 'users' ? 'page' : 'false' }}" @click(client.go('users'))><svg class="i" aria-hidden="true"><use href="#i-users"></use></svg><span>Người dùng</span></button>
+            <button class="nav-item {{ vm['tab'] === 'limits' ? 'active' : '' }}" aria-current="{{ vm['tab'] === 'limits' ? 'page' : 'false' }}" @click(client.go('limits'))><svg class="i" aria-hidden="true"><use href="#i-gauge"></use></svg><span>Hạn mức</span></button>
+        </nav>
+        <span class="spacer"></span>
+        <a href="/" data-nav="false" class="nav-item"><svg class="i" aria-hidden="true"><use href="#i-arrow-left"></use></svg><span>Về trang trò chuyện</span></a>
+        @if(vm['me'])
+        <div class="profile-row"><span class="avatar">{{ vm['me']['initial'] }}</span><span class="profile-text"><strong>{{ vm['me']['name'] }}</strong><small>{{ vm['me']['email'] }}</small></span></div>
+        @endif
     </aside>
     @if(vm['mobileNav'])<div class="sidebar-scrim" @click(client.patch({ mobileNav: false }))></div>@endif
     <main class="main-panel">
         <header class="topbar">
             <button class="icon-button mobile-toggle" aria-label="Mở thanh bên" @click(client.patch({ mobileNav: !vm['mobileNav'] }))><svg class="i" aria-hidden="true"><use href="#i-menu"></use></svg></button>
-            <div class="topbar-title">
-                @if(vm['conversation'])
-                <h1>{{ vm['conversation']['title'] }}</h1>
-                @elseif(vm['project'])
-                <h1><svg class="i" aria-hidden="true"><use href="#i-folder"></use></svg>{{ vm['project']['name'] }}</h1>
-                @else
-                <a href="/" class="brand topbar-brand" data-nav="false"><img src="/assets/img/gehihi-mark.svg" width="26" height="26" alt=""><span>Gehihi</span></a>
-                @endif
-            </div>
+            <div class="topbar-title"><h1>{{ vm['tab'] === 'overview' ? 'Tổng quan' : (vm['tab'] === 'providers' ? 'Provider hệ thống' : (vm['tab'] === 'users' ? 'Người dùng' : 'Hạn mức sử dụng')) }}</h1></div>
             <div class="topbar-actions">
-                @if(vm['conversation'])
-                <button class="icon-button" title="{{ ghText(vm['locale'],'Đổi tên','Rename') }}" aria-label="Đổi tên" @click(client.conversationAction('rename'))><svg class="i" aria-hidden="true"><use href="#i-pencil"></use></svg></button>
-                <button class="icon-button {{ vm['conversation']['pinned'] ? 'active' : '' }}" title="{{ ghText(vm['locale'],'Ghim','Pin') }}" aria-label="Ghim" @click(client.conversationAction('pin'))><svg class="i" aria-hidden="true"><use href="#i-pin"></use></svg></button>
-                <button class="icon-button" title="{{ ghText(vm['locale'],'Lưu trữ','Archive') }}" aria-label="Lưu trữ" @click(client.conversationAction('archive'))><svg class="i" aria-hidden="true"><use href="#i-archive"></use></svg></button>
-                <a class="icon-button hide-mobile" href="/api/conversations/{{ vm['conversation']['id'] }}/export" title="{{ ghText(vm['locale'],'Xuất Markdown','Export Markdown') }}" aria-label="Xuất Markdown" data-nav="false"><svg class="i" aria-hidden="true"><use href="#i-download"></use></svg></a>
-                <a class="icon-button text-icon hide-mobile" href="/api/conversations/{{ vm['conversation']['id'] }}/export?format=json" title="{{ ghText(vm['locale'],'Xuất JSON','Export JSON') }}" data-nav="false">JSON</a>
-                <button class="icon-button danger" title="{{ ghText(vm['locale'],'Xóa hội thoại','Delete conversation') }}" aria-label="Xóa hội thoại" @click(client.conversationAction('delete'))><svg class="i" aria-hidden="true"><use href="#i-trash"></use></svg></button>
-                <span class="topbar-divider"></span>
-                @else
-                <button class="quiet-button {{ vm['temporary'] ? 'active' : '' }}" title="{{ ghText(vm['locale'],'Không lưu vào lịch sử, tự xóa sau 24 giờ','Not saved to history, cleared after 24 hours') }}" @click(client.newChat(null, true))><svg class="i" aria-hidden="true"><use href="#i-clock"></use></svg><span>{{ ghText(vm['locale'],'Chat tạm thời','Temporary chat') }}</span></button>
+                @if(vm['tab'] === 'overview')
+                <div class="mode-tabs" role="group" aria-label="Khoảng thời gian"><button class="{{ vm['days'] === 7 ? 'active' : '' }}" aria-pressed="{{ vm['days'] === 7 ? 'true' : 'false' }}" @click(client.setDays(7))>7 ngày</button><button class="{{ vm['days'] === 30 ? 'active' : '' }}" aria-pressed="{{ vm['days'] === 30 ? 'true' : 'false' }}" @click(client.setDays(30))>30 ngày</button><button class="{{ vm['days'] === 90 ? 'active' : '' }}" aria-pressed="{{ vm['days'] === 90 ? 'true' : 'false' }}" @click(client.setDays(90))>90 ngày</button></div>
                 @endif
-                <button class="icon-button" aria-label="Cài đặt" title="{{ ghText(vm['locale'],'Cài đặt','Settings') }}" @click(client.settings())><svg class="i" aria-hidden="true"><use href="#i-settings"></use></svg></button>
+                <button class="icon-button" title="Tải lại" aria-label="Tải lại" disabled="{{ vm['busy'] }}" @click(client.go(vm['tab'], false))><svg class="i" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
             </div>
         </header>
         @if(vm['error'])
@@ -108,119 +47,116 @@ function providerType(event: Event) { const type = value(event); const form = (e
         @if(vm['notice'])
         <div class="toast notice" role="status"><span>{{ vm['notice'] }}</span><button aria-label="Đóng thông báo" @click(client.patch({ notice: '' }))><svg class="i" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
         @endif
-        @if(vm['import_available'])
-        <div class="banner"><span>{{ ghText(vm['locale'],'Bạn có dữ liệu từ phiên khách trước.','You have data from your previous guest session.') }}</span><button class="small-button primary" @click(client.importGuest())>{{ ghText(vm['locale'],'Nhập vào tài khoản','Import to account') }}</button><button class="icon-button small" aria-label="Bỏ qua" @click(client.patch({ import_available: false }))><svg class="i" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
-        @endif
-        @if(vm['project'])
-        <div class="banner project-strip"><span class="project-badge"><svg class="i" aria-hidden="true"><use href="#i-folder"></use></svg>{{ vm['project']['name'] }}</span><span class="muted">{{ ghText(vm['locale'],'Hướng dẫn chung','Shared instructions') }} · v{{ vm['project']['revision'] }}</span><span class="spacer"></span><button class="small-button" @click(client.patch({ modal: 'project', editProject: vm['project'] }))><svg class="i" aria-hidden="true"><use href="#i-pencil"></use></svg>{{ ghText(vm['locale'],'Hướng dẫn','Instructions') }}</button><button class="small-button" @click(client.patch({ modal: 'sources' }))><svg class="i" aria-hidden="true"><use href="#i-file"></use></svg>{{ ghText(vm['locale'],'Nguồn','Sources') }}</button>@if(vm['conversation'])<select class="small-select" aria-label="Chuyển hội thoại sang dự án" value="{{ vm['conversation']['project_id'] || '' }}" @change(client.moveConversation(value(event)))><option value="" selected="{{ (vm['conversation']['project_id'] || '') == '' }}">{{ ghText(vm['locale'],'Ngoài dự án','Outside a project') }}</option>@foreach(vm['projects'] as p)<option value="{{ p.id }}" selected="{{ (vm['conversation']['project_id'] || '') == p.id }}">{{ p.name }}</option>@endforeach</select>@endif</div>
-        @elseif(vm['conversation'] && vm['projects'].length)
-        <div class="banner project-strip subtle"><span class="muted">{{ ghText(vm['locale'],'Chưa thuộc dự án nào','Not in a project') }}</span><span class="spacer"></span><select class="small-select" aria-label="Chuyển hội thoại sang dự án" value="{{ vm['conversation']['project_id'] || '' }}" @change(client.moveConversation(value(event)))><option value="" selected="{{ (vm['conversation']['project_id'] || '') == '' }}">{{ ghText(vm['locale'],'Chuyển vào dự án…','Move to project…') }}</option>@foreach(vm['projects'] as p)<option value="{{ p.id }}" selected="{{ (vm['conversation']['project_id'] || '') == p.id }}">{{ p.name }}</option>@endforeach</select></div>
-        @endif
-        <div class="conversation-scroll {{ vm['conversation'] ? 'has-conversation' : '' }}">
-            @if(!vm['conversation'])
-            <section class="welcome">
-                <img class="welcome-mark" src="/assets/img/gehihi-mark.svg" width="64" height="64" alt="">
-                <h2>{{ vm['project'] ? vm['project']['name'] : ghText(vm['locale'],'Hôm nay bạn muốn tìm hiểu gì?','What’s on your mind today?') }}</h2>
-                <p>{{ vm['temporary'] ? ghText(vm['locale'],'Chat tạm thời: không lưu vào lịch sử và tự xóa sau 24 giờ.','Temporary chat: not saved to history, cleared after 24 hours.') : ghText(vm['locale'],'Hỏi nhanh, tra cứu web có nguồn, hoặc giao cho Gehihi nghiên cứu sâu.','Ask anything, search the web with sources, or run deep research.') }}</p>
-            </section>
-            @else
-            <section class="messages" aria-label="Nội dung hội thoại" aria-live="polite">
-                @foreach(vm['visibleMessages'] as message)
-                @key(message.id)
-                <article class="message {{ message.role === 'user' ? 'user-message' : 'assistant-message' }}">
-                    @if(message.role !== 'user')<img class="message-avatar" src="/assets/img/gehihi-mark.svg" width="28" height="28" alt="Gehihi">@endif
-                    <div class="message-body">
-                        @if(message.role !== 'user' && message.metadata?.model)<div class="message-label">{{ message.metadata.model.model_id }}</div>@endif
-                        @if(message.role === 'user')<div class="user-content">{{ message.content }}</div>@else<div class="markdown">{!! md(message.content) !!}</div>@endif
-                        @if(!message.content && message.role === 'assistant')<div class="typing-indicator"><i></i><i></i><i></i></div>@endif
-                        @if(message.metadata?.error)<p class="inline-error">{{ message.metadata.error }}</p>@endif
-                        <div class="message-actions"><button title="{{ ghText(vm['locale'],'Sao chép','Copy') }}" aria-label="Sao chép" @click(client.copy(message.content))><svg class="i" aria-hidden="true"><use href="#i-copy"></use></svg></button>@if(message.role === 'user')<button title="{{ ghText(vm['locale'],'Sửa câu hỏi','Edit') }}" aria-label="Sửa câu hỏi" @click(editMessage(message))><svg class="i" aria-hidden="true"><use href="#i-pencil"></use></svg></button>@else<button title="{{ ghText(vm['locale'],'Tạo lại','Regenerate') }}" aria-label="Tạo lại" @click(client.send('', { regenerate_id: message.id }))><svg class="i" aria-hidden="true"><use href="#i-refresh"></use></svg></button>@endif
-                            @if(siblings(message).length > 1)<span class="branch-picker">@foreach(siblings(message) as sibling)<button class="{{ sibling.id === message.id ? 'selected' : '' }}" @click(client.chooseBranch(sibling.id))>{{ siblings(message).indexOf(sibling) + 1 }}</button>@endforeach</span>@endif
-                        </div>
-                    </div>
-                </article>
+        <div class="conversation-scroll adm-content {{ vm['busy'] ? 'is-busy' : '' }}">
+            @if(vm['loading'])
+            <p class="muted-caption adm-loading">Đang tải…</p>
+            @endif
+
+            @if(vm['tab'] === 'overview' && vm['overview'])
+            <section class="adm-stats">
+                @foreach(vm['overview']['stats'] as stat)
+                @key(stat.id)
+                <div class="adm-card adm-stat {{ stat.warn ? 'warn' : '' }}"><span class="adm-stat-label"><svg class="i" aria-hidden="true"><use href="{{ stat.icon }}"></use></svg>{{ stat.label }}</span><strong>{{ stat.value }}</strong><small>{{ stat.hint }}</small></div>
                 @endforeach
-                @if(vm['run'])
-                <div class="run-status {{ vm['run']['status'] }}"><span class="status-dot"></span><span>{{ vm['run']['progress'] }}</span>@if(hasSources(vm['run']))<button @click(client.patch({ sourcePanel: !vm['sourcePanel'] }))>{{ vm['run']['sources'].length }} {{ ghText(vm['locale'],'nguồn','sources') }}<svg class="i" aria-hidden="true"><use href="#i-external"></use></svg></button>@endif</div>
-                @if(vm['run']['error'])<p class="inline-error">{{ vm['run']['error'] }}</p>@endif
-                @if(vm['run']['stop_reason'])<p class="muted-caption">{{ vm['run']['stop_reason'] }}</p>@endif
-                @if(vm['run']['context_truncated'])<p class="muted-caption">{{ ghText(vm['locale'],'Một phần lịch sử đã được rút gọn để vừa ngữ cảnh model. Hướng dẫn dự án được giữ nguyên.','Some history was shortened to fit the model context. Project instructions are retained.') }}</p>@endif
-                @if(vm['run']['can_resume'])<button class="small-button resume-button" @click(client.resume())>{{ ghText(vm['locale'],'Tiếp tục nghiên cứu từ dữ liệu đã lưu','Continue from saved research') }}<svg class="i" aria-hidden="true"><use href="#i-arrow-right"></use></svg></button>@endif
-                @if(vm['sourcePanel'])<div class="source-grid">@foreach(vm['run']['sources'] || [] as source)<a class="source-card" href="{{ source.url || '#' }}" target="_blank" rel="noopener noreferrer nofollow" data-nav="false"><span class="source-id">{{ source.id }}</span><strong>{{ source.title }}</strong><small>{{ source.kind === 'page_content' ? ghText(vm['locale'],'Đã đọc trang','Page read') : ghText(vm['locale'],'Nguồn một phần','Partial source') }} · {{ source.observed_at }}</small></a>@endforeach</div>@endif
-                @endif
             </section>
+            <section class="adm-card">
+                <div class="adm-card-head"><h2>Lượt chạy theo ngày</h2><span class="muted">{{ vm['overview']['active'] }} đang chạy · {{ vm['overview']['conversations'] }} hội thoại</span></div>
+                <div class="adm-chart" role="img" aria-label="Biểu đồ số lượt chạy mỗi ngày, cao nhất {{ vm['overview']['peak'] }} lượt">
+                    <span class="adm-chart-max">{{ vm['overview']['peak'] }}</span>
+                    <div class="adm-bars">
+                        @foreach(vm['overview']['bars'] as bar)
+                        @key(bar.key)
+                        <div class="adm-bar" tabindex="0" data-tip="{{ bar.tip }}" aria-label="{{ bar.tip }}"><i style="height: {{ bar.height }}%"></i><span>{{ bar.tick }}</span></div>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+            <div class="adm-grid">
+                <section class="adm-card">
+                    <div class="adm-card-head"><h2>Theo chế độ</h2></div>
+                    @foreach(vm['overview']['modes'] as mode)
+                    @key(mode.mode)
+                    <div class="adm-meter"><div class="adm-meter-row"><span>{{ mode.label }}</span><strong>{{ mode.count }}</strong></div><div class="adm-meter-track"><i style="width: {{ mode.pct }}%"></i></div></div>
+                    @endforeach
+                </section>
+                <section class="adm-card">
+                    <div class="adm-card-head"><h2>Model dùng nhiều</h2></div>
+                    @foreach(vm['overview']['models'] as model)
+                    @key(model.id)
+                    <div class="adm-meter"><div class="adm-meter-row"><span>{{ model.name }}</span><strong>{{ model.count }} <small class="muted">· {{ model.tokensLabel }} token</small></strong></div><div class="adm-meter-track"><i style="width: {{ model.pct }}%"></i></div></div>
+                    @endforeach
+                    @if(vm['overview']['models'].length === 0)<p class="muted-caption">Chưa có lượt chạy nào trong khoảng này.</p>@endif
+                </section>
+            </div>
+            <section class="adm-card">
+                <div class="adm-card-head"><h2>Lỗi gần đây</h2></div>
+                @if(vm['overview']['failures'].length === 0)<p class="muted-caption">Không có lượt lỗi nào. 🎉</p>@endif
+                <div class="adm-list">
+                    @foreach(vm['overview']['failures'] as failure)
+                    @key(failure.id)
+                    <div class="adm-list-row"><svg class="i danger-ink" aria-hidden="true"><use href="#i-alert"></use></svg><div><strong>{{ failure.error || 'Không rõ lỗi' }}</strong><small>{{ failure.meta }}</small></div></div>
+                    @endforeach
+                </div>
+            </section>
+            @endif
+
+            @if(vm['tab'] === 'providers' && vm['providers'])
+            <section class="adm-card">
+                <div class="adm-card-head"><div><h2>Provider dùng chung</h2><p class="muted">Phục vụ khách và tài khoản chưa có provider riêng. Thống kê 7 ngày gần nhất.</p></div><a class="small-button primary" href="/?manage=system" data-nav="false"><svg class="i" aria-hidden="true"><use href="#i-pencil"></use></svg>Quản lý provider</a></div>
+                <div class="adm-table-wrap">
+                    <table class="adm-table">
+                        <thead><tr><th>Provider</th><th>Trạng thái</th><th>Key</th><th>Model</th><th>Lượt 7 ngày</th><th>Tỉ lệ lỗi</th><th>Kiểm tra gần nhất</th></tr></thead>
+                        <tbody>
+                            @foreach(vm['providers']['system'] as p)
+                            @key(p.id)
+                            <tr><td><strong>{{ p.name }}</strong><small>{{ p.kindLabel }} · {{ p.type }}{{ p.is_default ? ' · mặc định' : '' }}</small></td><td><span class="adm-status {{ p.status }}"><i></i>{{ p.statusLabel }}</span></td><td>{{ p.keyLabel }}</td><td>{{ p.kind === 'search' ? '—' : p.models }}</td><td>{{ p.runs }}</td><td>{{ p.failRate }}</td><td><small>{{ p.test_status || '—' }}</small><small>{{ p.tested }}</small></td></tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if(vm['providers']['system'].length === 0)<p class="empty-state-text">Chưa có provider hệ thống. Khách sẽ không chat được cho tới khi bạn thêm một provider mô hình AI.</p>@endif
+            </section>
+            <section class="adm-card adm-inline-note"><svg class="i" aria-hidden="true"><use href="#i-users"></use></svg><span>{{ vm['providers']['personal']['users'] }} tài khoản tự cấu hình {{ vm['providers']['personal']['providers'] }} provider riêng. Key cá nhân chỉ chủ tài khoản dùng được.</span></section>
+            @endif
+
+            @if(vm['tab'] === 'users')
+            <section class="adm-card">
+                <div class="adm-card-head"><label class="search-box adm-search"><svg class="i" aria-hidden="true"><use href="#i-search"></use></svg><input type="search" aria-label="Tìm người dùng" placeholder="Tìm theo tên hoặc email…" value="{{ vm['q'] }}" @change(client.searchUsers(value(event)))></label><span class="muted">{{ vm['users'].length }} tài khoản</span></div>
+                <div class="adm-table-wrap">
+                    <table class="adm-table">
+                        <thead><tr><th>Người dùng</th><th>Tham gia</th><th>Hội thoại</th><th>Lượt 30 ngày</th><th>Token 30 ngày</th><th>Quyền</th></tr></thead>
+                        <tbody>
+                            @foreach(vm['users'] as u)
+                            @key(u.id)
+                            <tr><td><div class="adm-user"><span class="avatar">{{ u.initial }}</span><div><strong>{{ u.name }}{{ u.isMe ? ' (bạn)' : '' }}</strong><small>{{ u.email }}</small></div></div></td><td>{{ u.joined }}</td><td>{{ u.conversations }}</td><td>{{ u.runs30 }}</td><td>{{ u.tokens30 }}</td><td><button class="small-button {{ u.is_admin ? 'adm-admin-on' : '' }}" disabled="{{ vm['busy'] || u.isMe }}" title="{{ u.isMe ? 'Không thể tự thu quyền của chính bạn' : '' }}" @click(client.toggleAdmin(u))><svg class="i" aria-hidden="true"><use href="#i-shield"></use></svg>{{ u.is_admin ? 'Quản trị' : 'Thành viên' }}</button></td></tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if(!vm['busy'] && vm['users'].length === 0)<p class="empty-state-text">Không tìm thấy người dùng nào.</p>@endif
+            </section>
+            @endif
+
+            @if(vm['tab'] === 'limits' && vm['limits'].length)
+            <form class="adm-limits" @submit(client.saveLimits(event))>
+                <p class="muted adm-lead">Áp dụng ngay cho lượt chạy mới của mọi workspace, kể cả worker đang chạy. Lượt đang chạy giữ hạn mức lúc bắt đầu.</p>
+                @foreach(vm['limits'] as group)
+                @key(group.id)
+                <section class="adm-card">
+                    <div class="adm-card-head"><h2>{{ group.title }}</h2></div>
+                    <div class="adm-fields">
+                        @foreach(group.fields as field)
+                        @key(field.key)
+                        <label class="adm-field {{ field.changed ? 'changed' : '' }}"><span>{{ field.label }}</span><span class="adm-input"><input type="number" name="{{ field.key }}" value="{{ field.value }}" min="0" step="1" required><em>{{ field.unit }}</em></span><small>{{ field.hint }}</small></label>
+                        @endforeach
+                    </div>
+                </section>
+                @endforeach
+                <div class="adm-actions"><button type="button" class="small-button" disabled="{{ vm['busy'] }}" @click(client.resetLimits())>Khôi phục mặc định</button><button class="primary-button" disabled="{{ vm['busy'] }}">{{ vm['busy'] ? 'Đang lưu…' : 'Lưu hạn mức' }}</button></div>
+            </form>
             @endif
         </div>
-        <section class="composer-region">
-            @if(!vm['loading'] && vm['models'].length === 0)<div class="setup-note"><svg class="i" aria-hidden="true"><use href="#i-sparkles"></use></svg><span>{{ ghText(vm['locale'],'AI chưa được cấu hình. Thêm một provider để bắt đầu trò chuyện.','AI is not configured yet. Add a provider to start chatting.') }}</span><button class="small-button primary" @click(client.settings())>{{ ghText(vm['locale'],'Cấu hình','Configure') }}</button></div>@endif
-            <form class="composer" @submit(send(event))>
-                @if(vm['selectedFiles'].length)<div class="attachment-chips">@foreach(vm['files'] as file)@if(vm['selectedFiles'].includes(file.id))<button type="button" title="{{ ghText(vm['locale'],'Bỏ chọn','Remove') }}" @click(client.toggleFile(file.id))><svg class="i" aria-hidden="true"><use href="#i-file"></use></svg><span>{{ file.name }}</span><svg class="i" aria-hidden="true"><use href="#i-x"></use></svg></button>@endif@endforeach</div>@endif
-                <textarea id="prompt" aria-label="Nhập câu hỏi" @bind(prompt) @keydown(composerKey(event)) rows="1" maxlength="14000" placeholder="{{ vm['mode'] === 'deep' ? ghText(vm['locale'],'Bạn muốn nghiên cứu điều gì?','What would you like to research?') : (vm['mode'] === 'quick' ? ghText(vm['locale'],'Tra cứu trên web…','Search the web…') : ghText(vm['locale'],'Hỏi Gehihi bất cứ điều gì…','Ask Gehihi anything…')) }}"></textarea>
-                <div class="composer-toolbar">
-                    <label class="icon-button attach-button" title="{{ ghText(vm['locale'],'Tải tệp lên','Upload files') }}"><svg class="i" aria-hidden="true"><use href="#i-clip"></use></svg><input type="file" multiple aria-label="Tải tệp lên" @change(client.upload(event)) accept=".pdf,.txt,.md,.csv,.tsv,.json,.php,.js,.ts,.py,.html,.css,.png,.jpg,.jpeg,.webp"></label>
-                    <button type="button" class="icon-button" title="{{ ghText(vm['locale'],'Chọn nguồn','Choose sources') }}" aria-label="Chọn nguồn" @click(client.patch({ modal: 'sources' }))><svg class="i" aria-hidden="true"><use href="#i-file"></use></svg></button>
-                    <div class="mode-tabs" role="group" aria-label="Chế độ trả lời"><button type="button" title="{{ ghText(vm['locale'],'Trò chuyện','Chat') }}" aria-label="Trò chuyện" aria-pressed="{{ vm['mode'] === 'chat' ? 'true' : 'false' }}" class="{{ vm['mode'] === 'chat' ? 'active' : '' }}" @click(client.patch({ mode: 'chat' }))><svg class="i" aria-hidden="true"><use href="#i-chat"></use></svg><span>{{ ghText(vm['locale'],'Trò chuyện','Chat') }}</span></button><button type="button" title="{{ ghText(vm['locale'],'Tra cứu web','Web search') }}" aria-label="Tra cứu web" aria-pressed="{{ vm['mode'] === 'quick' ? 'true' : 'false' }}" class="{{ vm['mode'] === 'quick' ? 'active' : '' }}" @click(client.patch({ mode: 'quick' }))><svg class="i" aria-hidden="true"><use href="#i-globe"></use></svg><span>{{ ghText(vm['locale'],'Tra cứu web','Web search') }}</span></button><button type="button" title="{{ ghText(vm['locale'],'Nghiên cứu sâu','Research') }}" aria-label="Nghiên cứu sâu" aria-pressed="{{ vm['mode'] === 'deep' ? 'true' : 'false' }}" class="{{ vm['mode'] === 'deep' ? 'active' : '' }}" @click(client.patch({ mode: 'deep' }))><svg class="i" aria-hidden="true"><use href="#i-sparkles"></use></svg><span>{{ ghText(vm['locale'],'Nghiên cứu sâu','Research') }}</span></button></div>
-                    <span class="spacer"></span>
-                    <select class="model-select" aria-label="Chọn model" value="{{ vm['selectedModel'] }}" @change(patch('selectedModel', event))><option value="" selected="{{ (vm['selectedModel']) == '' }}">{{ ghText(vm['locale'],'Model mặc định','Default model') }}</option>@foreach(vm['models'] as model)<option value="{{ model.value }}" selected="{{ (vm['selectedModel']) == model.value }}">{{ model.label }}</option>@endforeach</select>
-                    <button type="button" class="icon-button {{ vm['advanced'] ? 'active' : '' }}" title="{{ ghText(vm['locale'],'Tùy chọn nâng cao','Advanced options') }}" aria-label="Tùy chọn nâng cao" aria-expanded="{{ vm['advanced'] ? 'true' : 'false' }}" @click(client.patch({ advanced: !vm['advanced'] }))><svg class="i" aria-hidden="true"><use href="#i-sliders"></use></svg></button>
-                    @if(vm['run'] && ['queued','running'].includes(vm['run']['status']))<button class="send-button stop-button" type="button" @click(client.cancel()) aria-label="Dừng tạo câu trả lời" title="{{ ghText(vm['locale'],'Dừng','Stop') }}"><svg class="i" aria-hidden="true"><use href="#i-stop"></use></svg></button>@else<button class="send-button" type="submit" disabled="{{ vm['busy'] || !prompt.trim() }}" aria-label="Gửi câu hỏi" title="{{ ghText(vm['locale'],'Gửi (Enter)','Send (Enter)') }}"><svg class="i" aria-hidden="true"><use href="#i-arrow-up"></use></svg></button>@endif
-                </div>
-            </form>
-            @if(vm['advanced'])
-            <div class="advanced-options"><label>{{ ghText(vm['locale'],'Chế độ','Mode') }}<select value="{{ vm['thinking'] }}" @change(patch('thinking',event))><option value="auto" selected="{{ (vm['thinking']) == 'auto' }}">{{ ghText(vm['locale'],'Tự động','Automatic') }}</option><option value="fast" selected="{{ (vm['thinking']) == 'fast' }}">{{ ghText(vm['locale'],'Nhanh','Fast') }}</option><option value="reasoning" selected="{{ (vm['thinking']) == 'reasoning' }}">{{ ghText(vm['locale'],'Model suy luận','Reasoning model') }}</option></select></label><label>{{ ghText(vm['locale'],'Model dự phòng đã cho phép','Allowed fallback model') }}<select value="{{ vm['fallbacks'][0] || '' }}" @change(client.patch({ fallbacks: [value(event)] }))><option value="" selected="{{ (vm['fallbacks'][0] || '') == '' }}">{{ ghText(vm['locale'],'Không tự chuyển provider','No automatic provider switch') }}</option>@foreach(vm['models'] as model)<option value="{{ model.value }}" selected="{{ (vm['fallbacks'][0] || '') == model.value }}">{{ model.label }}</option>@endforeach</select></label>
-                @if(vm['mode'] !== 'chat')<label>{{ ghText(vm['locale'],'Provider tìm kiếm','Search provider') }}<select value="{{ vm['searchProvider'] }}" @change(patch('searchProvider',event))><option value="" selected="{{ (vm['searchProvider']) == '' }}">{{ ghText(vm['locale'],'Theo cấu hình mặc định','Configured defaults') }}</option>@foreach(vm['catalog'] as provider)@if(provider.kind === 'search')<option value="{{ provider.id }}" selected="{{ (vm['searchProvider']) == provider.id }}">{{ provider.name }}</option>@endif@endforeach</select></label><label>{{ ghText(vm['locale'],'Ưu tiên domain','Include domains') }}<input value="{{ vm['includeDomains'] }}" @change(patch('includeDomains',event)) placeholder="example.com"></label><label>{{ ghText(vm['locale'],'Loại trừ domain','Exclude domains') }}<input value="{{ vm['excludeDomains'] }}" @change(patch('excludeDomains',event)) placeholder="example.com"></label><label>{{ ghText(vm['locale'],'Ngôn ngữ / thị trường','Language / country') }}<select value="{{ vm['language'] }}" @change(client.patch({ language: value(event), country: value(event) === 'vi' ? 'vn' : 'us' }))><option value="vi" selected="{{ (vm['language']) == 'vi' }}">Tiếng Việt / Việt Nam</option><option value="en" selected="{{ (vm['language']) == 'en' }}">English / US</option></select></label>@endif
-            </div>
-            @endif
-            @if(!vm['conversation'])
-            <div class="suggestions">
-                <button @click(sample('Tìm hiểu các xu hướng ứng dụng AI trong giáo dục tại Việt Nam, dẫn nguồn đáng tin cậy.', 'quick'))><span class="suggestion-icon cyan"><svg class="i" aria-hidden="true"><use href="#i-globe"></use></svg></span><span><strong>{{ ghText(vm['locale'],'Khám phá một chủ đề','Explore a topic') }}</strong><small>{{ ghText(vm['locale'],'Trả lời kèm nguồn từ web','Answers backed by web sources') }}</small></span></button>
-                <button @click(sample('Nghiên cứu các giải pháp lưu trữ dữ liệu cho một ứng dụng nhỏ, so sánh ưu nhược điểm và đưa ra gợi ý có nguồn.', 'deep'))><span class="suggestion-icon indigo"><svg class="i" aria-hidden="true"><use href="#i-sparkles"></use></svg></span><span><strong>{{ ghText(vm['locale'],'Nghiên cứu sâu','Go deeper') }}</strong><small>{{ ghText(vm['locale'],'Báo cáo nhiều nguồn, có trích dẫn','Multi-source report with citations') }}</small></span></button>
-                <button @click(sample('Giúp tôi phát triển ý tưởng cho một dự án mới. Hãy bắt đầu bằng việc hỏi điều tôi muốn giải quyết.', 'chat'))><span class="suggestion-icon coral"><svg class="i" aria-hidden="true"><use href="#i-bulb"></use></svg></span><span><strong>{{ ghText(vm['locale'],'Khơi nguồn ý tưởng','Brainstorm ideas') }}</strong><small>{{ ghText(vm['locale'],'Cùng phát triển điều bạn đang nghĩ','Develop what’s on your mind') }}</small></span></button>
-            </div>
-            @endif
-            <p class="composer-note">{{ ghText(vm['locale'],'Gehihi có thể sai. Hãy kiểm tra thông tin quan trọng.','Gehihi can make mistakes. Check important information.') }}@if(!vm['user']) {{ ghText(vm['locale'],'Dữ liệu khách lưu tối đa 7 ngày.','Guest data is kept for up to 7 days.') }}@endif</p>
-        </section>
     </main>
-    @if(vm['modal'])
-    <div class="modal-backdrop"><section class="modal {{ ['settings','provider','sources'].includes(vm['modal']) ? 'wide-modal' : '' }}" role="dialog" aria-modal="true" aria-label="{{ vm['modal'] }}"><button class="icon-button modal-close" aria-label="Đóng cửa sổ" @click(client.close())><svg class="i" aria-hidden="true"><use href="#i-x"></use></svg></button>
-        @if(vm['modal'] === 'project')
-        <h2>{{ vm['editProject']['id'] ? ghText(vm['locale'],'Chỉnh sửa dự án','Edit project') : ghText(vm['locale'],'Một nơi cho ý tưởng của bạn','A home for your idea') }}</h2><p class="modal-description">{{ ghText(vm['locale'],'Hướng dẫn này được nạp vào mọi lượt trò chuyện trong dự án.','These instructions apply to every conversation turn in this project.') }}</p>
-        <form @submit(client.projectForm(event))><label>{{ ghText(vm['locale'],'Tên dự án','Project name') }}<input name="name" required maxlength="120" value="{{ vm['editProject']['name'] || '' }}" placeholder="Ví dụ: Kế hoạch ra mắt sản phẩm"></label><label>{{ ghText(vm['locale'],'Hướng dẫn chung','Shared instructions') }}<textarea name="instructions" rows="7" maxlength="14000" placeholder="Mục tiêu, bối cảnh, cách trả lời bạn mong muốn…">{{ vm['editProject']['instructions'] }}</textarea></label><div class="form-footer">@if(vm['editProject']['id'])<button type="button" class="danger-button" @click(client.removeProject(vm['editProject']))>{{ ghText(vm['locale'],'Xóa dự án','Delete project') }}</button>@endif<button class="primary-button" disabled="{{ vm['busy'] }}">{{ ghText(vm['locale'],'Lưu dự án','Save project') }}</button></div></form>
-        @elseif(vm['modal'] === 'sources')
-        <h2>{{ ghText(vm['locale'],'Mang theo ngữ cảnh của bạn','Bring your context along') }}</h2><p class="modal-description">{{ ghText(vm['locale'],'Chọn tối đa 5 tệp cho lượt tiếp theo. Dữ liệu được gửi tới provider bạn chọn.','Choose up to 5 files for the next turn. Data is sent to your selected provider.') }}</p><div class="file-list">@foreach(vm['availableFiles'] as file)<div class="file-row"><label><input type="checkbox" checked="{{ vm['selectedFiles'].includes(file.id) }}" disabled="{{ !['ready','partial'].includes(file.status) }}" @change(client.toggleFile(file.id))><span><strong>{{ file.name }}</strong><small>{{ file.status }} · {{ kilobytes(file.size) }} KB {{ file.error || '' }}</small></span></label><a class="icon-button small" href="/api/files/{{ file.id }}/download" aria-label="Tải xuống" data-nav="false"><svg class="i" aria-hidden="true"><use href="#i-download"></use></svg></a><button class="icon-button small danger" aria-label="Xóa tệp" @click(client.removeFile(file.id))><svg class="i" aria-hidden="true"><use href="#i-trash"></use></svg></button></div>@endforeach</div><label class="upload-zone"><svg class="i" aria-hidden="true"><use href="#i-clip"></use></svg>{{ ghText(vm['locale'],'Tải tệp từ máy tính','Upload from your computer') }}<input type="file" multiple aria-label="Chọn tệp" @change(client.upload(event))></label><p class="muted-caption">PDF văn bản, TXT, Markdown, CSV, code và ảnh · tối đa 10 MB/tệp. PDF scan cần OCR.</p>
-        @elseif(vm['modal'] === 'settings')
-        <h2>{{ vm['systemProviders'] ? ghText(vm['locale'],'Cấu hình hệ thống','System configuration') : ghText(vm['locale'],'Cài đặt không gian','Workspace settings') }}</h2>
-        <div class="settings-account"><span class="avatar">{{ vm['user'] ? initial(vm['user']['name']) : 'K' }}</span><div><strong>{{ vm['user'] ? vm['user']['name'] : ghText(vm['locale'],'Bạn đang sử dụng với tư cách khách','You’re browsing as a guest') }}</strong><small>{{ vm['user'] ? vm['user']['email'] : ghText(vm['locale'],'Đăng nhập để đồng bộ và thêm provider riêng.','Sign in to sync and add your own providers.') }}</small></div>@if(vm['user'])<button class="quiet-button" @click(client.logout())>{{ ghText(vm['locale'],'Đăng xuất','Sign out') }}</button>@else<button class="primary-button" @click(client.patch({ modal: 'login' }))>{{ ghText(vm['locale'],'Đăng nhập','Sign in') }}</button>@endif</div>
-        <div class="settings-appearance"><label>{{ ghText(vm['locale'],'Giao diện','Appearance') }}<select value="{{ vm['theme'] }}" @change(client.preference('theme',value(event)))><option value="system" selected="{{ (vm['theme']) == 'system' }}">{{ ghText(vm['locale'],'Theo thiết bị','System') }}</option><option value="light" selected="{{ (vm['theme']) == 'light' }}">{{ ghText(vm['locale'],'Sáng','Light') }}</option><option value="dark" selected="{{ (vm['theme']) == 'dark' }}">{{ ghText(vm['locale'],'Tối','Dark') }}</option></select></label><label>{{ ghText(vm['locale'],'Ngôn ngữ','Language') }}<select value="{{ vm['locale'] }}" @change(client.preference('locale',value(event)))><option value="vi" selected="{{ (vm['locale']) == 'vi' }}">Tiếng Việt</option><option value="en" selected="{{ (vm['locale']) == 'en' }}">English</option></select></label></div>
-        @if(vm['user'])
-        <div class="settings-heading"><h3>{{ vm['systemProviders'] ? ghText(vm['locale'],'Provider dùng chung','Shared providers') : ghText(vm['locale'],'Provider của bạn','Your providers') }}</h3><button class="small-button" @click(client.editProvider())><svg class="i" aria-hidden="true"><use href="#i-plus"></use></svg>{{ ghText(vm['locale'],'Thêm provider','Add provider') }}</button></div>
-        @if(vm['user']['is_admin'])<div class="scope-tabs"><button class="{{ !vm['systemProviders'] ? 'active' : '' }}" @click(client.settings(false))>{{ ghText(vm['locale'],'Cá nhân','Personal') }}</button><button class="{{ vm['systemProviders'] ? 'active' : '' }}" @click(client.settings(true))>{{ ghText(vm['locale'],'Hệ thống','System') }}</button></div>@endif
-        <div class="provider-list">@foreach(vm['providers'] as provider)<div class="provider-row"><span class="provider-icon"><svg class="i" aria-hidden="true"><use href="{{ provider.kind === 'search' ? '#i-search' : '#i-sparkles' }}"></use></svg></span><div><strong>{{ provider.name }}</strong><small>{{ provider.type }} · {{ provider.key_count }} key · {{ provider.models.length }} model · {{ provider.enabled ? ghText(vm['locale'],'Đang bật','Enabled') : ghText(vm['locale'],'Đã tắt','Disabled') }}</small></div><button class="small-button" @click(client.editProvider(provider))>{{ ghText(vm['locale'],'Sửa','Edit') }}</button><button class="icon-button small danger" aria-label="Xóa provider" @click(client.removeProvider(provider.id))><svg class="i" aria-hidden="true"><use href="#i-trash"></use></svg></button></div>@endforeach</div>
-        @if(vm['providers'].length === 0)<p class="empty-state-text">{{ ghText(vm['locale'],'Chưa có provider. Bạn có thể thêm model AI hoặc dịch vụ tìm kiếm.','No providers yet. Add an AI model or a search service.') }}</p>@endif
-        <p class="muted-caption">{{ ghText(vm['locale'],'Key được mã hóa, không gửi trở lại trình duyệt. Model tổng hợp và provider tìm kiếm được quản lý độc lập.','Keys are encrypted and never returned to the browser. Language models and search services are configured independently.') }}</p>
-        <div class="usage-summary"><span>{{ ghText(vm['locale'],'Sử dụng hôm nay','Today’s usage') }}</span><strong>{{ vm['usage']['runs_today'] || 0 }} {{ ghText(vm['locale'],'lượt','runs') }} · {{ vm['usage']['tokens_today'] || 0 }} tokens</strong><small>{{ ghText(vm['locale'],'Token có thể gồm số ước tính khi provider không báo usage.','May include estimates when a provider does not report usage.') }}</small></div>
-        @endif
-        @elseif(vm['modal'] === 'provider')
-        <h2>{{ vm['editProvider']['id'] ? ghText(vm['locale'],'Chỉnh sửa provider','Edit provider') : ghText(vm['locale'],'Kết nối sức mạnh của bạn','Connect your possibilities') }}</h2><p class="modal-description">{{ vm['systemProviders'] ? ghText(vm['locale'],'Provider hệ thống phục vụ cả khách chưa đăng nhập.','System providers are available to guests too.') : ghText(vm['locale'],'Cấu hình riêng, chỉ tài khoản của bạn được sử dụng.','Your configuration is available only to your account.') }}</p>
-        <form @submit(client.saveProvider(event))><div class="two-columns"><label>{{ ghText(vm['locale'],'Tên hiển thị','Display name') }}<input name="name" required value="{{ vm['editProvider']['name'] || '' }}"></label><label>{{ ghText(vm['locale'],'Nhà cung cấp','Provider type') }}<select name="type" value="{{ vm['editProvider']['type'] || 'google' }}" @change(providerType(event))>@foreach(vm['typeOptions'] as type)<option value="{{ type.value }}" selected="{{ (vm['editProvider']['type'] || 'google') == type.value }}">{{ type.label }}</option>@endforeach</select></label></div><label>Base URL<input name="base_url" value="{{ vm['editProvider']['base_url'] || '' }}" placeholder="{{ vm['providerTypes'][vm['editProvider']['type']]['base'] || 'https://…' }}"></label><label>API keys <small>{{ ghText(vm['locale'],'Mỗi key một dòng. Để trống để giữ key đã lưu.','One key per line. Leave blank to keep saved keys.') }}</small><textarea name="api_keys" rows="2" autocomplete="off" spellcheck="false" placeholder="{{ vm['editProvider']['key_count'] ? '•••• Đã lưu key' : 'API key' }}">{{ vm['editProvider']['api_keys'] }}</textarea></label>
-        @if(vm['providerTypes'][vm['editProvider']['type']]['kind'] === 'llm')<label>{{ ghText(vm['locale'],'Model được phép dùng','Allowed model IDs') }}<textarea name="models" rows="4" placeholder="{{ ghText(vm['locale'],'Mỗi model ID một dòng','One model ID per line') }}">{{ vm['editProvider']['models'] }}</textarea></label><label>{{ ghText(vm['locale'],'Model mặc định','Default model') }}<input name="default_model" value="{{ vm['editProvider']['default_model'] || '' }}" placeholder="{{ ghText(vm['locale'],'Để trống chọn model đầu tiên','Leave blank to use the first model') }}"></label><div class="two-columns"><label>{{ ghText(vm['locale'],'Model nhận ảnh','Vision model IDs') }}<textarea name="vision_models" rows="2" placeholder="{{ ghText(vm['locale'],'Chỉ model ID đã xác nhận nhận ảnh','Only verified vision model IDs') }}">{{ vm['editProvider']['vision_models'] }}</textarea></label><label>{{ ghText(vm['locale'],'Model suy luận','Reasoning model IDs') }}<textarea name="reasoning_models" rows="2" placeholder="{{ ghText(vm['locale'],'Chỉ model ID hỗ trợ suy luận','Only reasoning-capable model IDs') }}">{{ vm['editProvider']['reasoning_models'] }}</textarea></label></div>@endif
-        <div class="checkboxes"><label><input type="checkbox" name="enabled" checked="{{ vm['editProvider']['enabled'] }}">{{ ghText(vm['locale'],'Bật provider','Enable provider') }}</label><label><input type="checkbox" name="is_default" checked="{{ vm['editProvider']['is_default'] }}">{{ ghText(vm['locale'],'Ưu tiên mặc định','Preferred default') }}</label><label><input type="checkbox" name="clear_keys">{{ ghText(vm['locale'],'Xóa key đã lưu','Clear saved keys') }}</label></div>
-        @if(vm['probe'])<div class="probe-results">@if(vm['probe']['message'])<p>{{ vm['probe']['message'] }}</p>@endif @foreach(vm['probe']['results'] || [] as result)<p class="{{ result.ok ? 'test-ok' : 'test-error' }}">{{ probeLabel(result) }}{{ probeResult(result) }}</p>@endforeach</div>@endif
-        <div class="form-footer">@if(vm['providerTypes'][vm['editProvider']['type']]['kind'] === 'llm')<button type="button" class="small-button" disabled="{{ vm['busy'] }}" @click(client.probe(event,'discover'))>{{ ghText(vm['locale'],'Tải model','Load models') }}</button>@endif<button type="button" class="small-button" disabled="{{ vm['busy'] }}" @click(client.probe(event,'test'))>{{ ghText(vm['locale'],'Kiểm tra','Test') }}</button><button class="primary-button" disabled="{{ vm['busy'] }}">{{ vm['busy'] ? ghText(vm['locale'],'Đang xử lý…','Working…') : ghText(vm['locale'],'Lưu provider','Save provider') }}</button></div></form>
-        @elseif(vm['modal'] === 'rename')
-        <h2>{{ ghText(vm['locale'],'Đổi tên cuộc trò chuyện','Rename conversation') }}</h2><form @submit(client.rename(event))><label>{{ ghText(vm['locale'],'Tên hội thoại','Conversation title') }}<input name="title" required maxlength="180" value="{{ conversationTitle(vm['conversation']) }}"></label><button class="primary-button">{{ ghText(vm['locale'],'Lưu','Save') }}</button></form>
-        @elseif(['login','register','forgot','reset'].includes(vm['modal']))
-        <img class="modal-mark" src="/assets/img/gehihi-mark.svg" width="44" height="44" alt=""><h2>{{ authTitle(vm['locale'],vm['modal']) }}</h2><p class="modal-description">{{ ghText(vm['locale'],'Dự án, hội thoại và provider của bạn ở cùng một nơi.','Your projects, conversations, and providers in one place.') }}</p><form @submit(client.auth(event,vm['modal']))>
-        @if(vm['modal'] === 'register')<label>{{ ghText(vm['locale'],'Tên của bạn','Your name') }}<input name="name" autocomplete="name" required maxlength="100"></label>@endif
-        <label>Email<input type="email" name="email" autocomplete="email" required value="{{ vm['modal'] === 'reset' ? vm['resetEmail'] : '' }}"></label>
-        @if(vm['modal'] !== 'forgot')<label>{{ ghText(vm['locale'],'Mật khẩu','Password') }}<input type="password" name="password" required minlength="{{ vm['modal'] === 'login' ? 1 : 12 }}" autocomplete="{{ vm['modal'] === 'login' ? 'current-password' : 'new-password' }}"></label>@endif
-        @if(vm['modal'] === 'reset')<input type="hidden" name="token" value="{{ vm['resetToken'] }}"><label>{{ ghText(vm['locale'],'Nhập lại mật khẩu','Confirm password') }}<input type="password" name="password_confirmation" required autocomplete="new-password"></label>@endif
-        <button class="primary-button full-width" disabled="{{ vm['busy'] }}">{{ ghText(vm['locale'],'Tiếp tục','Continue') }}</button></form>
-        <div class="auth-links">@if(vm['modal'] === 'login')<button @click(client.patch({ modal: 'register' }))>{{ ghText(vm['locale'],'Tạo tài khoản miễn phí','Create a free account') }}</button><button @click(client.patch({ modal: 'forgot' }))>{{ ghText(vm['locale'],'Quên mật khẩu?','Forgot password?') }}</button>@else<button @click(client.patch({ modal: 'login' }))>{{ ghText(vm['locale'],'Quay lại đăng nhập','Back to sign in') }}</button>@endif</div>
-        @endif
-        @if(vm['error'])<p class="inline-error" role="alert">{{ vm['error'] }}</p>@endif
-    </section></div>
-    @endif
 </div>
 @endblock
 </template>

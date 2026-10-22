@@ -42,6 +42,7 @@ export class GehihiClient {
             await this.route();
             const params = new URLSearchParams(location.search);
             if (params.get('manage') === 'system' && this.state.user?.is_admin) await this.settings(true);
+            if (params.has('login') && !this.state.user) this.patch({ modal: 'login' });
             if (params.has('reset_token')) this.patch({ modal: 'reset', resetToken: params.get('reset_token'), resetEmail: params.get('email') || '' });
         });
         this.patch({ loading: false });
@@ -53,7 +54,6 @@ export class GehihiClient {
         const project = location.pathname.match(/^\/p\/([^/]+)/);
         if (match) await this.open(match[1], false);
         else { this.patch({ conversation: null, run: null, project: project ? this.state.projects.find((p: Data) => p.id === project[1]) || null : null }); }
-        if (location.pathname.startsWith('/admin') && this.state.user?.is_admin) await this.settings(true);
     }
     async open(id: string, navigate = true) {
         const navigation = ++this.navigation;
@@ -173,7 +173,7 @@ export class GehihiClient {
     async removeProvider(id: string) { if (!confirm('Xóa provider này? Các lựa chọn đang trỏ đến nó sẽ không chạy được.')) return; await this.attempt(async () => { await this.api('/providers/' + id + (this.state.systemProviders ? '?system=1' : ''), 'DELETE'); await this.refresh(); await this.settings(this.state.systemProviders); }); }
     async auth(event: Event, action: string) {
         event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget as HTMLFormElement));
-        await this.attempt(async () => { await this.api('/auth/' + action, 'POST', data); if (['forgot', 'reset'].includes(action)) { this.patch({ notice: action === 'forgot' ? 'Nếu email đã đăng ký, hướng dẫn sẽ được gửi.' : 'Đã đổi mật khẩu. Bạn có thể đăng nhập.', modal: 'login' }); return; } location.assign('/'); });
+        await this.attempt(async () => { await this.api('/auth/' + action, 'POST', data); if (['forgot', 'reset'].includes(action)) { this.patch({ notice: action === 'forgot' ? 'Nếu email đã đăng ký, hướng dẫn sẽ được gửi.' : 'Đã đổi mật khẩu. Bạn có thể đăng nhập.', modal: 'login' }); return; } const next = new URLSearchParams(location.search).get('next') || ''; location.assign(next.startsWith('/admin') ? next : '/'); });
     }
     async logout() { await this.attempt(async () => { this.close(); await this.api('/auth/logout', 'POST'); location.assign('/'); }); }
     async importGuest() { await this.attempt(async () => { await this.api('/auth/import', 'POST'); await this.refresh(); this.patch({ notice: 'Đã nhập workspace khách vào tài khoản.' }); }); }

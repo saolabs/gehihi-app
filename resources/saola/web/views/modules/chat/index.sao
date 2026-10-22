@@ -72,6 +72,7 @@ function providerType(event: Event) { const type = value(event); const form = (e
                 @endif
             </nav>
         </div>
+        @if(vm['user'] && vm['user']['is_admin'])<a href="/admin" data-nav="false" class="nav-item admin-link"><svg class="i" aria-hidden="true"><use href="#i-shield"></use></svg><span>{{ ghText(vm['locale'],'Trang quản trị','Admin console') }}</span></a>@endif
         <button class="profile-row" @click(client.settings())><span class="avatar">{{ vm['user'] ? initial(vm['user']['name']) : 'K' }}</span><span class="profile-text"><strong>{{ vm['user'] ? vm['user']['name'] : ghText(vm['locale'],'Khách','Guest') }}</strong><small>{{ vm['user'] ? vm['user']['email'] : ghText(vm['locale'],'Đăng nhập để lưu lâu dài','Sign in to keep your data') }}</small></span><svg class="i" aria-hidden="true"><use href="#i-settings"></use></svg></button>
     </aside>
     @if(vm['mobileNav'])<div class="sidebar-scrim" @click(client.patch({ mobileNav: false }))></div>@endif

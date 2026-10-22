@@ -9,6 +9,7 @@ System::context('admin')?->pushLaravelRoute();
 System::context('web')?->pushLaravelRoute();
 SPA::inactive();
 
+use App\Modules\Admin\Http\AdminApiController as Admin;
 use App\Modules\AiProviders\Http\ProviderController as Providers;
 use App\Modules\AiRuntime\Http\RunController as Runs;
 use App\Modules\Identity\Http\IdentityController as Identity;
@@ -51,4 +52,12 @@ Route::prefix('api')->group(function () {
     Route::post('/runs/{id}/cancel', [Runs::class, 'cancel']);
     Route::post('/runs/{id}/resume', [Runs::class, 'resume'])->middleware('throttle:10,1');
     Route::get('/usage',[Runs::class, 'usage']);
+    Route::prefix('admin')->middleware(['auth', 'can:admin', 'throttle:60,1'])->group(function () {
+        Route::get('/overview', [Admin::class, 'overview']);
+        Route::get('/providers', [Admin::class, 'providers']);
+        Route::get('/users', [Admin::class, 'users']);
+        Route::patch('/users/{id}', [Admin::class, 'updateUser']);
+        Route::get('/limits', [Admin::class, 'limits']);
+        Route::put('/limits', [Admin::class, 'saveLimits']);
+    });
 });

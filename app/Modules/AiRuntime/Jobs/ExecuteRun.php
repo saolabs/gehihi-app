@@ -2,6 +2,7 @@
 
 namespace App\Modules\AiRuntime\Jobs;
 
+use App\Modules\Admin\Services\Limits;
 use App\Modules\AiRuntime\Repositories\RunRepositoryInterface;
 use App\Modules\AiRuntime\Services\Executor;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -19,6 +20,7 @@ class ExecuteRun implements ShouldQueue
 
     public function handle(Executor $executor): void
     {
+        Limits::apply(); // worker sống lâu: nạp hạn mức mới nhất do quản trị chỉnh
         if ((app(RunRepositoryInterface::class)->find($this->runId)->checkpoint['epoch'] ?? 0) === $this->epoch) {
             $executor->execute($this->runId);
         }

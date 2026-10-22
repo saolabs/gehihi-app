@@ -21,4 +21,6 @@ interface ProviderRepositoryInterface
     public function keys(Provider $provider, bool $probe = false): array;
 
     public function cooldown(Provider $provider, ?string $key, int $seconds): void;
+
+    public function coolingKeys(Provider $provider): int;
 }

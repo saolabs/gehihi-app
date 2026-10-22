@@ -16,7 +16,9 @@ class ModuleServiceProvider extends \Saola\Core\Providers\ModuleServiceProvider
             }
         });
         System::context('admin')->module(['slug' => 'settings', 'prefix' => '/'])->controller(AdminController::class)->as('settings')->group(function ($m) {
-            $m->get('/', 'index')->name('index')->viewModule('index');
+            foreach (['/' => 'index', '/providers' => 'providers', '/users' => 'users', '/limits' => 'limits'] as $path => $name) {
+                $m->get($path, 'index')->name($name)->viewModule('index');
+            }
         });
     }
 }
