@@ -5,6 +5,7 @@ namespace App\Modules\Research\Services;
 use App\Modules\AiProviders\Models\Provider;
 use App\Modules\AiProviders\Repositories\ProviderRepositoryInterface;
 use App\Modules\AiProviders\Services\OutboundHttp;
+use App\Modules\AiProviders\Services\ProviderCatalog;
 use App\Modules\AiProviders\Services\ProviderFailure;
 use App\Modules\AiProviders\Services\ProviderService;
 use App\Modules\AiRuntime\Services\RunStopped;
@@ -47,7 +48,7 @@ class SearchGateway
                 if (++$requests > 4) {
                     return ['hits' => [], 'attempts' => $attempts];
                 }$headers = ['Accept' => 'application/json'];
-                $base = $p->base_url;
+                $base = ProviderCatalog::baseUrl($p->type, $p->base_url);
                 $language = $options['language'] ?? 'vi';
                 $country = $options['country'] ?? 'vn';
                 [$method,$url,$body] = match ($p->type) {

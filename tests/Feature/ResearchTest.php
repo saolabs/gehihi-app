@@ -118,12 +118,13 @@ class ResearchTest extends TestCase
 
     public function test_google_and_anthropic_receive_project_instructions_in_native_system_fields(): void
     {
+        config(['gehihi.egress_allowlist' => ['generativelanguage.googleapis.com', 'api.anthropic.com']]);
         foreach (['google', 'anthropic'] as $type) {
             Http::swap(new Factory);
             Http::preventStrayRequests();
             Provider::query()->delete();
             Provider::create(['name' => $type, 'type' => $type, 'kind' => 'llm', 'base_url' => 'https://api.example.test/v1', 'secrets' => ['test-key'], 'models' => ['test-model'], 'default_model' => 'test-model', 'enabled' => true]);
-            Http::fake(['api.example.test/*' => Http::response($type === 'google' ? ['candidates' => [['content' => ['parts' => [['text' => 'OK']]], 'finishReason' => 'STOP']], 'usageMetadata' => ['totalTokenCount' => 5]] : ['content' => [['type' => 'text', 'text' => 'OK']], 'usage' => ['input_tokens' => 3, 'output_tokens' => 2]], 200)]);
+            Http::fake([\App\Modules\AiProviders\Services\ProviderCatalog::TYPES[$type]['base'].'/*' => Http::response($type === 'google' ? ['candidates' => [['content' => ['parts' => [['text' => 'OK']]], 'finishReason' => 'STOP']], 'usageMetadata' => ['totalTokenCount' => 5]] : ['content' => [['type' => 'text', 'text' => 'OK']], 'usage' => ['input_tokens' => 3, 'output_tokens' => 2]], 200)]);
             $p = $this->postJson('/api/projects', ['name' => $type, 'instructions' => 'Retain this instruction.'])->json('data.id');
             $c = $this->postJson('/api/conversations', ['project_id' => $p])->json('data.id');
             $run = $this->postJson('/api/conversations/'.$c.'/runs', ['request_id' => (string) Str::uuid(), 'message' => 'Hi', 'mode' => 'chat'])->assertStatus(202)->json('data');

@@ -1,7 +1,7 @@
 @vars(provider = {}, types = [])
 @await
 @cache(false)
-@states({ type: provider['type'], kind: provider['kind'], models: provider['models'], probe: [], message: '', error: '', busy: false })
+@states({ type: provider['type'], kind: provider['kind'], editableBase: provider['base_url_editable'], baseUrl: provider['base_url'], models: provider['models'], defaultModel: provider['default_model'], visionModels: provider['vision_models'], reasoningModels: provider['reasoning_models'], catalog: null, choices: provider['model_choices'], selectedModels: provider['model_ids'], filter: '', manualModel: '', probe: [], message: '', error: '', busy: false })
 
 <template>
 @extends(__layout__ + 'base')
@@ -15,15 +15,33 @@
         <label>Tên hiển thị<input name="name" required maxlength="100" value="{{ provider['name'] }}"></label>
         <label>Nhà cung cấp<select name="type" @change(changeType(event))>@foreach(types as t)<option value="{{ t['value'] }}" selected="{{ type == t['value'] }}">{{ t['label'] }}</option>@endforeach</select></label>
     </div>
-    <label>Base URL <small>Để trống để dùng địa chỉ mặc định của nhà cung cấp.</small><input name="base_url" maxlength="400" value="{{ provider['base_url'] }}" placeholder="https://…"></label>
+    @if(editableBase)
+    <label>Base URL <small>Địa chỉ API của provider tương thích hoặc tự host.</small><input name="base_url" required maxlength="400" @bind(baseUrl) placeholder="https://…"></label>
+    @endif
+    @if(type === 'google_vertex')<p class="muted-caption">Dùng API key Google Cloud cho Vertex AI Express Mode.</p>@endif
     <label>API keys <small>{{ provider['keys_hint'] }}</small><textarea name="api_keys" rows="2" autocomplete="off" spellcheck="false" placeholder="API key"></textarea></label>
     @if(kind === 'llm')
-    <label>Model được phép dùng <small>Mỗi model ID một dòng, hoặc bấm “Tải model”.</small><textarea name="models" rows="4" @bind(models)></textarea></label>
-    <label>Model mặc định<input name="default_model" maxlength="200" value="{{ provider['default_model'] }}" placeholder="Để trống để dùng model đầu tiên"></label>
-    <div class="two-columns">
-        <label>Model nhận ảnh<textarea name="vision_models" rows="2" placeholder="Chỉ model ID đã xác nhận nhận ảnh">{{ provider['vision_models'] }}</textarea></label>
-        <label>Model suy luận<textarea name="reasoning_models" rows="2" placeholder="Chỉ model ID hỗ trợ suy luận">{{ provider['reasoning_models'] }}</textarea></label>
-    </div>
+    <section class="provider-models" aria-label="Model được phép dùng">
+        <div class="model-picker-heading"><strong>Model được phép dùng</strong><span>{{ selectedModels.length }} đã chọn</span></div>
+        <div class="model-picker-toolbar">
+            <input type="search" aria-label="Lọc model" placeholder="Lọc model…" value="{{ filter }}" @input(filterModels(event))>
+            <button type="button" class="small-button" @disabled(busy) @click(check(event, 'discover'))>{{ busy ? 'Đang tải…' : 'Tải model' }}</button>
+        </div>
+        <div class="model-picker-grid">
+            @foreach(choices as model)
+            @key(model['id'])
+            <div class="model-picker-card {{ model['selected'] ? 'selected' : '' }}">
+                <label class="model-picker-option"><input type="checkbox" checked="{{ model['selected'] }}" @change(selectModel('models', model['id'], event))><span>{{ model['id'] }}@if(model['stale'])<small>Không có trong danh sách của endpoint</small>@endif</span></label>
+                @if(model['selected'])<div class="model-capabilities"><label><input type="checkbox" checked="{{ model['vision'] }}" @change(selectModel('vision_models', model['id'], event))>Nhận ảnh</label><label><input type="checkbox" checked="{{ model['reasoning'] }}" @change(selectModel('reasoning_models', model['id'], event))>Suy luận</label></div>@endif
+            </div>
+            @endforeach
+            @if(choices.length === 0)<p class="model-picker-empty">{{ filter ? 'Không có model khớp bộ lọc.' : 'Tải danh sách từ nhà cung cấp hoặc thêm model ID bên dưới.' }}</p>@endif
+        </div>
+        <div class="model-picker-toolbar"><input aria-label="Model ID bổ sung" placeholder="Thêm model ID…" @bind(manualModel) @keydown(manualKey(event))><button type="button" class="small-button" @click(addModel())>Thêm</button></div>
+        <p class="muted-caption">Tick model để cho phép dùng. Chỉ bật Nhận ảnh / Suy luận khi đã xác nhận model hỗ trợ.</p>
+        <input type="hidden" name="models" value="{{ models }}"><input type="hidden" name="vision_models" value="{{ visionModels }}"><input type="hidden" name="reasoning_models" value="{{ reasoningModels }}">
+    </section>
+    <label>Model mặc định<select name="default_model" @bind(defaultModel)><option value="" selected="{{ !defaultModel }}">Dùng model đầu tiên đã chọn</option>@foreach(selectedModels as id)<option value="{{ id }}" selected="{{ defaultModel === id }}">{{ id }}</option>@endforeach</select></label>
     @endif
     <div class="checkboxes">
         <label><input type="checkbox" name="enabled" checked="{{ provider['enabled'] }}">Bật provider</label>
@@ -41,7 +59,6 @@
     @endif
     @if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
     <div class="form-footer">
-        @if(kind === 'llm')<button type="button" class="small-button" @disabled(busy) @click(check(event, 'discover'))>Tải model</button>@endif
         <button type="button" class="small-button" @disabled(busy) @click(check(event, 'test'))>Kiểm tra key</button>
         <button class="primary-button" @disabled(busy)>{{ busy ? 'Đang xử lý…' : 'Lưu provider' }}</button>
     </div>
@@ -50,14 +67,33 @@
 </template>
 
 <script setup lang="ts">
+    import { modelIds, modelChoices, toggleModel, type ModelField } from '@app/ProviderModels';
     import { App } from '@saolabs/client';
     import { formValues, send } from '@admin/app/services/AdminHttp';
 
     function changeType(event: Event) {
         const value = (event.target as HTMLSelectElement).value;
-        setType(value);
-        setKind(types.find((t: any) => t.value === value)?.kind || 'llm');
+        const meta = types.find((t: any) => t.value === value);
+        const form = (event.target as HTMLElement).closest('form') as HTMLFormElement;
+        setBaseUrl(''); setEditableBase(!!meta?.base_url_editable);
+        (form.elements.namedItem('api_keys') as HTMLTextAreaElement).value = '';
+        setType(value); setKind(meta?.kind || 'llm');
+        setCatalog(null); setChoices([]); setSelectedModels([]); setFilter(''); setModels(''); setDefaultModel(''); setVisionModels(''); setReasoningModels(''); setManualModel(''); setProbe([]); setMessage(''); setError('');
     }
+
+    function fields() { return { models, default_model: defaultModel, vision_models: visionModels, reasoning_models: reasoningModels }; }
+    function syncChoices() { setSelectedModels(modelIds(models)); setChoices(modelChoices(catalog, fields(), filter)); }
+    function filterModels(event: Event) { setFilter((event.target as HTMLInputElement).value); syncChoices(); }
+    function selectModel(field: ModelField, id: string, event: Event) {
+        applySelection(toggleModel(fields(), field, id, (event.target as HTMLInputElement).checked));
+    }
+    function applySelection(next: any) { setModels(next.models); setDefaultModel(next.default_model); setVisionModels(next.vision_models); setReasoningModels(next.reasoning_models); syncChoices(); }
+    function addModel() {
+        let next = fields();
+        for (const id of modelIds(manualModel)) next = toggleModel(next, 'models', id, true);
+        applySelection(next); setManualModel('');
+    }
+    function manualKey(event: KeyboardEvent) { if (event.key === 'Enter') { event.preventDefault(); addModel(); } }
 
     async function run(task: () => Promise<void>) {
         setBusy(true);
@@ -66,7 +102,9 @@
     }
 
     function payload(form: HTMLFormElement) {
-        return { ...formValues(form), id: provider.id };
+        const data = formValues(form);
+        if (!editableBase) delete data.base_url;
+        return { ...data, id: provider.id };
     }
 
     function check(event: Event, action: string) {
@@ -76,9 +114,8 @@
         return run(async () => {
             const data = await send('post', '/admin/providers/' + action, payload(form));
             if (action === 'discover') {
-                const merged = Array.from(new Set([...models.split(/[\n,]+/).map((m: string) => m.trim()).filter(Boolean), ...data.models]));
-                setModels(merged.join('\n'));
-                setMessage('Đã tải ' + data.models.length + ' model. Bấm “Lưu provider” để lưu.');
+                setCatalog(data.models); syncChoices();
+                setMessage('Đã tải ' + data.models.length + ' model. Tick các model muốn sử dụng rồi lưu provider.');
             } else {
                 setProbe(data.results.map((r: any) => ({ key: r.key, ok: r.ok, text: 'Key ' + r.key + ' · ' + (r.ok ? 'OK · ' + r.latency_ms + ' ms' : r.message) })));
             }

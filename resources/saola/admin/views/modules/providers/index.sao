@@ -1,53 +1,68 @@
 @vars(rows = [], personal_users = 0, personal_providers = 0)
 @await
-@states({ list: rows, error: '', busy: false })
+    @states({ list: rows, error: '', busy: false })
 
-<template>
-@extends(__layout__ + 'base')
-@section('meta:title', 'Provider · Quản trị Gehihi')
-@block('content')
-<header class="adm-page-head">
-    <div><h1>Provider hệ thống</h1><p class="muted">Phục vụ khách và tài khoản chưa có provider riêng. Thống kê 7 ngày gần nhất.</p></div>
-    <a class="small-button primary" href="/admin/providers/create"><svg class="i" aria-hidden="true"><use href="#i-plus"></use></svg>Thêm provider</a>
-</header>
-@if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
-<section class="adm-card">
-    <div class="adm-table-wrap">
-        <table class="adm-table">
-            <thead><tr><th>Provider</th><th>Trạng thái</th><th>Key</th><th>Model</th><th>Lượt 7 ngày</th><th>Tỉ lệ lỗi</th><th>Kiểm tra</th><th><span class="sr-only">Thao tác</span></th></tr></thead>
-            <tbody>
-                @foreach(list as p)
-                @key(p['id'])
-                <tr>
-                    <td><a class="adm-row-link" href="/admin/providers/{{ p['id'] }}"><strong>{{ p['name'] }}</strong></a><small>{{ p['kind_label'] }} · {{ p['type_label'] }}{{ p['is_default'] ? ' · mặc định' : '' }}</small></td>
-                    <td><span class="adm-status {{ p['status'] }}"><i></i>{{ p['status_label'] }}</span></td>
-                    <td>{{ p['keys'] }}</td><td>{{ p['models'] }}</td><td>{{ p['runs'] }}</td><td>{{ p['fail_rate'] }}</td><td><small>{{ p['tested'] }}</small></td>
-                    <td class="adm-row-actions"><a class="icon-button small" href="/admin/providers/{{ p['id'] }}" title="Sửa" aria-label="Sửa {{ p['name'] }}"><svg class="i" aria-hidden="true"><use href="#i-pencil"></use></svg></a><button class="icon-button small danger" title="Xóa" aria-label="Xóa {{ p['name'] }}" @disabled(busy) @click(remove(p))><svg class="i" aria-hidden="true"><use href="#i-trash"></use></svg></button></td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-    </div>
-    @if(list.length === 0)<p class="empty-state-text">Chưa có provider hệ thống. Khách sẽ không chat được cho tới khi bạn thêm một provider mô hình AI.</p>@endif
-</section>
-<section class="adm-card adm-inline-note"><svg class="i" aria-hidden="true"><use href="#i-users"></use></svg><span>{{ personal_users }} tài khoản tự cấu hình {{ personal_providers }} provider riêng. Key cá nhân chỉ chủ tài khoản dùng được.</span></section>
-@endblock
-</template>
+    <template>
+        @extends(__layout__ + 'base')
+        @section('meta:title', 'Provider · Quản trị Gehihi')
+        @block('content')
+            <header class="adm-page-head">
+                <div><h1>Provider hệ thống</h1><p class="muted">Phục vụ khách và tài khoản chưa có provider riêng. Thống kê 7 ngày gần nhất.</p></div>
+                <a class="small-button primary" href="/admin/providers/create"><svg class="i" aria-hidden="true"><use href="#i-plus"></use></svg>Thêm provider</a>
+            </header>
+            @if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
+            <section class="adm-card">
+                <div class="adm-table-wrap">
+                    <table class="adm-table">
+                        <thead><tr><th>Provider</th><th>Trạng thái</th><th>Key</th><th>Model</th><th>Lượt 7 ngày</th><th>Tỉ lệ lỗi</th><th>Kiểm tra</th><th><span class="sr-only">Thao tác</span></th></tr></thead>
+                        <tbody>
+                            @foreach(list as p)
+                                @key(p['id'])
+                                <tr>
+                                    <td><a class="adm-row-link" href="/admin/providers/{{ p['id'] }}"><strong>{{ p['name'] }}</strong></a><small>{{ p['kind_label'] }} · {{ p['type_label'] }}{{ p['is_default'] ? ' · mặc định' : '' }}</small></td>
+                                    <td><span class="adm-status {{ p['status'] }}"><i></i>{{ p['status_label'] }}</span></td>
+                                    <td>{{ p['keys'] }}</td><td>{{ p['models'] }}</td><td>{{ p['runs'] }}</td><td>{{ p['fail_rate'] }}</td><td><small>{{ p['tested'] }}</small></td>
+                                    <td class="adm-row-actions"><a class="icon-button small" href="/admin/providers/{{ p['id'] }}" title="Sửa" aria-label="Sửa {{ p['name'] }}"><svg class="i" aria-hidden="true"><use href="#i-pencil"></use></svg></a><button class="icon-button small danger" title="Xóa" aria-label="Xóa {{ p['name'] }}" @disabled(busy) @click(remove(p))><svg class="i" aria-hidden="true"><use href="#i-trash"></use></svg></button></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if(list.length === 0)<p class="empty-state-text">Chưa có provider hệ thống. Khách sẽ không chat được cho tới khi bạn thêm một provider mô hình AI.</p>@endif
+            </section>
+            <section class="adm-card adm-inline-note"><svg class="i" aria-hidden="true"><use href="#i-users"></use></svg><span>{{ personal_users }} tài khoản tự cấu hình {{ personal_providers }} provider riêng. Key cá nhân chỉ chủ tài khoản dùng được.</span></section>
+        @endblock
+    </template>
 
-<script setup lang="ts">
-    import { send } from '@admin/app/services/AdminHttp';
+    <script setup lang="ts">
+        import { send } from "@admin/app/services/AdminHttp";
 
-    // @await lo lần vào đầu; quay lại từ PageCache (vd. sau khi lưu form) thì nạp lại danh sách.
-    async function resumed() {
-        try { setList((await send('get', '/admin/providers')).rows); } catch (e: any) { setError(e.message); }
-    }
+        // @await lo lần vào đầu; quay lại từ PageCache (vd. sau khi lưu form) thì nạp lại danh sách.
+        async function resumed() {
+            try {
+                setList((await send("get", "/admin/providers")).rows);
+            } catch (e: any) {
+                setError(e.message);
+            }
+        }
 
-    async function remove(provider: any) {
-        if (!confirm('Xóa provider ' + provider.name + '? Các lựa chọn đang trỏ đến nó sẽ không chạy được.')) return;
-        setBusy(true);
-        setError('');
-        try { setList((await send('delete', '/admin/providers/' + provider.id)).rows); }
-        catch (e: any) { setError(e.message); }
-        finally { setBusy(false); }
-    }
-</script>
+        async function remove(provider: any) {
+            if (
+                !confirm(
+                    "Xóa provider " +
+                        provider.name +
+                        "? Các lựa chọn đang trỏ đến nó sẽ không chạy được.",
+                )
+            )
+                return;
+            setBusy(true);
+            setError("");
+            try {
+                setList((await send("delete", "/admin/providers/" + provider.id)).rows);
+            } catch (e: any) {
+                setError(e.message);
+            } finally {
+                setBusy(false);
+            }
+        }
+    </script>

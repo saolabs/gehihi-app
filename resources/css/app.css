@@ -599,3 +599,22 @@ button, a, label { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Provider model picker, shared by personal settings and admin. */
+.provider-models { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.model-picker-heading, .model-picker-toolbar { display: flex; align-items: center; gap: 10px; }
+.model-picker-heading { justify-content: space-between; font-size: 13.5px; }
+.model-picker-heading span { color: var(--muted); font-weight: 400; }
+.model-picker-toolbar input { flex: 1; min-width: 0; }
+.model-picker-toolbar button { flex: none; }
+.model-picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; min-height: 120px; max-height: 360px; overflow-y: auto; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-subtle); }
+.model-picker-card { padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); min-width: 0; }
+.model-picker-card.selected { border-color: var(--brand); background: var(--brand-subtle); }
+.adm-form .model-picker-option, .modal .model-picker-option { flex-direction: row; align-items: flex-start; gap: 8px; cursor: pointer; color: var(--fg); }
+.model-picker-option input { flex: none; margin-top: 2px; }
+.model-picker-option span { min-width: 0; overflow-wrap: anywhere; }
+.model-picker-option small { display: block; margin-top: 3px; font-size: 11.5px; }
+.model-capabilities { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0 24px; }
+.adm-form .model-capabilities label, .modal .model-capabilities label { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; font-weight: 400; }
+.model-picker-empty { grid-column: 1 / -1; margin: auto; padding: 20px; color: var(--muted); font-size: 13px; text-align: center; }
+@media (max-width: 640px) { .model-picker-grid { grid-template-columns: 1fr; max-height: 300px; } }

@@ -35,4 +35,4 @@ Chưa chạy xác thực bằng API key thật hoặc deploy qua proxy productio
 - Project/model default có API; UI chưa có màn hình riêng cho mọi chính sách chọn model, lịch sử revision hoặc lưu trữ dự án. Bản địa hóa giao diện chính có Việt/Anh; một số thông báo backend vẫn tiếng Việt.
 - Chưa có dashboard health/chi phí theo tiền, giá model, ngân sách tiền toàn hệ thống, tổng quota dung lượng hoặc quản lý nhiều replica. Giới hạn khách theo workspace kết hợp throttle IP hiện tại cần được hiệu chỉnh trước khi mở công khai.
 - Tệp/hội thoại/dự án xóa mềm; chưa có giao diện khôi phục. Chat tạm thời không xuất hiện trong lịch sử và được scheduler dọn; không cam kết provider bên ngoài không lưu dữ liệu.
-- Chưa có Canvas, thư viện artifact, tạo ảnh, native search, Vertex hoặc hệ agent tổng quát. Hệ agent riêng giữ cho phiên bản sau theo yêu cầu.
+- Chưa có Canvas, thư viện artifact, tạo ảnh, native search, Vertex qua service account/OAuth (mới có API key Express Mode) hoặc hệ agent tổng quát. Hệ agent riêng giữ cho phiên bản sau theo yêu cầu.

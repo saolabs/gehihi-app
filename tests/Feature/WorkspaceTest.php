@@ -25,7 +25,7 @@ class WorkspaceTest extends TestCase
         parent::setUp();
         Queue::fake();
         Http::preventStrayRequests();
-        config(['gehihi.egress_allowlist' => ['api.example.test', 'search.example.test', 'source.example.test']]);
+        config(['gehihi.egress_allowlist' => ['api.example.test', 'api.openai.com', 'search.example.test', 'source.example.test']]);
         Storage::fake('local');
     }
 
@@ -153,7 +153,7 @@ class WorkspaceTest extends TestCase
     public function test_key_rotation_honours_cooldown_and_records_usage(): void
     {
         $this->provider(null, 'openai', ['bad-key', 'good-key']);
-        Http::fake(['api.example.test/*' => Http::sequence()->push(['error' => ['message' => 'limited']], 429)->push(['choices' => [['message' => ['content' => 'OK'], 'finish_reason' => 'stop']], 'usage' => ['total_tokens' => 8]])]);
+        Http::fake(['api.openai.com/*' => Http::sequence()->push(['error' => ['message' => 'limited']], 429)->push(['choices' => [['message' => ['content' => 'OK'], 'finish_reason' => 'stop']], 'usage' => ['total_tokens' => 8]])]);
         $run = $this->start($this->conversation());
         app(Executor::class)->execute($run['id']);
         $this->getJson('/api/runs/'.$run['id'])->assertJsonPath('data.status', 'completed')->assertJsonPath('data.content', 'OK')->assertJsonPath('data.used_tokens', 8);

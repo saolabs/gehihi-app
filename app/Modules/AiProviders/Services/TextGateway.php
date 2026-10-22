@@ -37,7 +37,7 @@ class TextGateway
                         throw new ProviderFailure('Provider báo lỗi khi đang tạo nội dung.');
                     }
                     $piece = '';
-                    if ($p->type === 'google') {
+                    if (in_array($p->type, ['google', 'google_vertex'], true)) {
                         foreach ($data['candidates'][0]['content']['parts'] ?? [] as $part) {
                             if (! ($part['thought'] ?? false)) {
                                 $piece .= $part['text'] ?? '';
@@ -147,9 +147,10 @@ continue;
 
     private function request(Provider $p, string $model, array $messages, int $limit): array
     {
+        $base = ProviderCatalog::baseUrl($p->type, $p->base_url);
         $system = implode("\n\n", array_column(array_filter($messages, fn ($m) => $m['role'] === 'system'), 'content'));
         $turns = array_values(array_filter($messages, fn ($m) => $m['role'] !== 'system'));
-        if ($p->type === 'google') {
+        if (in_array($p->type, ['google', 'google_vertex'], true)) {
             $contents = array_map(function ($m) {
                 $parts = [['text' => $m['content']]];
                 foreach ($m['images'] ?? [] as $i) {
@@ -159,7 +160,7 @@ continue;
 return ['role' => $m['role'] === 'assistant' ? 'model' : 'user', 'parts' => $parts];
             }, $turns);
 
-            return [$p->base_url.'/models/'.rawurlencode($model).':streamGenerateContent?alt=sse', ['systemInstruction' => ['parts' => [['text' => $system]]], 'contents' => $contents, 'generationConfig' => ['maxOutputTokens' => $limit]]];
+            return [$base.'/models/'.rawurlencode($model).':streamGenerateContent?alt=sse', ['systemInstruction' => ['parts' => [['text' => $system]]], 'contents' => $contents, 'generationConfig' => ['maxOutputTokens' => $limit]]];
         }
         if ($p->type === 'anthropic') {
             $turns = array_map(function ($m) {
@@ -171,7 +172,7 @@ return ['role' => $m['role'] === 'assistant' ? 'model' : 'user', 'parts' => $par
 return ['role' => $m['role'], 'content' => $parts];
             }, $turns);
 
-            return [$p->base_url.'/messages', ['model' => $model, 'max_tokens' => $limit, 'system' => $system, 'messages' => $turns, 'stream' => true]];
+            return [$base.'/messages', ['model' => $model, 'max_tokens' => $limit, 'system' => $system, 'messages' => $turns, 'stream' => true]];
         }
         $turns = array_map(function ($m) {
             $parts = [['type' => 'text', 'text' => $m['content']]];
@@ -182,6 +183,6 @@ return ['role' => $m['role'], 'content' => $parts];
 return ['role' => $m['role'], 'content' => count($parts) > 1 ? $parts : $m['content']];
         }, $turns);
 
-        return [$p->base_url.'/chat/completions', ['model' => $model, 'messages' => [['role' => 'system', 'content' => $system], ...$turns], $p->type === 'openai' ? 'max_completion_tokens' : 'max_tokens' => $limit, 'stream' => true, 'stream_options' => ['include_usage' => true]]];
+        return [$base.'/chat/completions', ['model' => $model, 'messages' => [['role' => 'system', 'content' => $system], ...$turns], $p->type === 'openai' ? 'max_completion_tokens' : 'max_tokens' => $limit, 'stream' => true, 'stream_options' => ['include_usage' => true]]];
     }
 }

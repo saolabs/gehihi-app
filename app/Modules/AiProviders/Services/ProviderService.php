@@ -14,7 +14,7 @@ class ProviderService
     /** Luật kiểm tra form provider, dùng chung cho cài đặt cá nhân và trang quản trị. */
     public static function rules(): array
     {
-        return ['name' => ['required', 'string', 'max:100'], 'type' => ['required', Rule::in(array_keys(ProviderCatalog::TYPES))], 'base_url' => ['nullable', 'string', 'max:400'], 'api_keys' => ['nullable', 'string', 'max:16000'], 'clear_keys' => ['sometimes', 'boolean'], 'models' => ['nullable', 'string', 'max:20000'], 'default_model' => ['nullable', 'string', 'max:200'], 'enabled' => ['sometimes', 'boolean'], 'is_default' => ['sometimes', 'boolean'], 'vision_models' => ['nullable', 'string', 'max:20000'], 'reasoning_models' => ['nullable', 'string', 'max:20000'], 'vision' => ['sometimes', 'boolean'], 'reasoning' => ['sometimes', 'boolean']];
+        return ['name' => ['required', 'string', 'max:100'], 'type' => ['required', Rule::in(array_keys(ProviderCatalog::TYPES))], 'base_url' => ['exclude_unless:type,openai_compatible,searxng', 'required', 'string', 'max:400'], 'api_keys' => ['nullable', 'string', 'max:16000'], 'clear_keys' => ['sometimes', 'boolean'], 'models' => ['nullable', 'string', 'max:20000'], 'default_model' => ['nullable', 'string', 'max:200'], 'enabled' => ['sometimes', 'boolean'], 'is_default' => ['sometimes', 'boolean'], 'vision_models' => ['nullable', 'string', 'max:20000'], 'reasoning_models' => ['nullable', 'string', 'max:20000'], 'vision' => ['sometimes', 'boolean'], 'reasoning' => ['sometimes', 'boolean']];
     }
 
     /** Dữ liệu điền sẵn cho form sửa: danh sách model dạng một-dòng-một-ID, không bao giờ kèm key. */
@@ -22,7 +22,7 @@ class ProviderService
     {
         $has = fn (string $cap) => array_values(array_filter($p->models ?? [], fn ($id) => $p->capabilities['models'][$id][$cap] ?? $p->capabilities[$cap] ?? false));
 
-        return ['id' => $p->id, 'name' => $p->name, 'type' => $p->type, 'kind' => $p->kind, 'base_url' => $p->base_url, 'models' => implode("\n", $p->models ?? []), 'default_model' => $p->default_model,
+        return ['id' => $p->id, 'name' => $p->name, 'type' => $p->type, 'kind' => $p->kind, 'base_url' => ProviderCatalog::editableBaseUrl($p->type) ? $p->base_url : '', 'models' => implode("\n", $p->models ?? []), 'default_model' => $p->default_model,
             'vision_models' => implode("\n", $has('vision')), 'reasoning_models' => implode("\n", $has('reasoning')), 'enabled' => $p->enabled, 'is_default' => $p->is_default, 'key_count' => count($p->secrets ?? [])];
     }
 
@@ -38,7 +38,7 @@ class ProviderService
 
     public function public(Provider $p): array
     {
-        return [...$p->toArray(), 'scope' => $p->user_id ? 'user' : 'system', 'key_count' => count($p->secrets ?? [])];
+        return [...$p->toArray(), 'base_url' => ProviderCatalog::editableBaseUrl($p->type) ? $p->base_url : '', 'scope' => $p->user_id ? 'user' : 'system', 'key_count' => count($p->secrets ?? [])];
     }
 
     public function draft(?string $id, ?string $owner, array $data): Provider
@@ -59,8 +59,11 @@ class ProviderService
         if (! $keys && ! in_array($type, ['openai_compatible', 'searxng'])) {
             throw ValidationException::withMessages(['api_keys' => 'Provider cần ít nhất một API key.']);
         }
-        $base = rtrim(trim($data['base_url'] ?? '') ?: $meta['base'], '/');
-        $this->http->options($base);
+        $base = ProviderCatalog::editableBaseUrl($type) ? rtrim(trim($data['base_url'] ?? ''), '/') : '';
+        if (ProviderCatalog::editableBaseUrl($type) && $base === '') {
+            throw ValidationException::withMessages(['base_url' => 'Nhập Base URL của provider tùy chỉnh.']);
+        }
+        $this->http->options(ProviderCatalog::baseUrl($type, $base));
         $models = array_values(array_unique(array_filter(array_map('trim', preg_split('/[\r\n,]+/', $data['models'] ?? '')))));
         if ($meta['kind'] === 'llm' && ! $models) {
             throw ValidationException::withMessages(['models' => 'Nhập ít nhất một model ID hoặc tải danh sách model.']);
@@ -177,30 +180,41 @@ return $out;
         if (trim($data['models'] ?? '') === '') {
             $data['models'] = '__discovery__';
         }$data['default_model'] = '';
+        // Capabilities belong to the saved selection, not the temporary discovery model.
+        unset($data['vision_models'], $data['reasoning_models'], $data['vision'], $data['reasoning']);
         $p = $this->draft($id, $owner, $data);
         if ($p->kind === 'search') {
             return [];
         }
         $headers = $this->headers($p, ($p->secrets ?? [])[0] ?? null);
-        $base = $p->base_url.'/models';
+        $base = ProviderCatalog::baseUrl($p->type, $p->base_url).'/models';
+        if ($p->type === 'google_vertex') {
+            $base = preg_replace('#/v1/#', '/v1beta1/', $base);
+        }
         $ids = [];
         $cursor = null;
         for ($page = 0; $page < 20; $page++) {
-            $query = $p->type === 'google' ? ['pageSize' => 1000] : ($p->type === 'anthropic' ? ['limit' => 1000] : []);
+            $google = in_array($p->type, ['google', 'google_vertex'], true);
+            $query = $google ? ['pageSize' => 1000] : ($p->type === 'anthropic' ? ['limit' => 1000] : []);
             if ($cursor) {
-                $query[$p->type === 'google' ? 'pageToken' : 'after_id'] = $cursor;
+                $query[$google ? 'pageToken' : 'after_id'] = $cursor;
             }
             $r = $this->http->send('GET', $base.($query ? '?'.http_build_query($query) : ''), $headers);
             if (! $r->successful()) {
                 throw new ProviderFailure('Không tải được danh sách model: HTTP '.$r->status(), $r->status());
             }
             $payload = $this->http->json($r);
-            foreach (($payload['data'] ?? $payload['models'] ?? []) as $row) {
+            foreach (($payload['data'] ?? $payload['models'] ?? $payload['publisherModels'] ?? []) as $row) {
                 if ($p->type === 'google' && ! in_array('generateContent', $row['supportedGenerationMethods'] ?? [], true)) {
                     continue;
                 }$model = $row['id'] ?? $row['name'] ?? null;
                 if ($model) {
-                    $ids[] = preg_replace('#^models/#', '', $model);
+                    $model = preg_replace('#^(?:publishers/google/)?models/#', '', $model);
+                    // This gateway serves Gemini text/vision, not embedding, audio or image generation.
+                    if ($p->type === 'google_vertex' && (! str_starts_with($model, 'gemini-') || preg_match('/image|embedding|tts|audio|live|robotics/', $model))) {
+                        continue;
+                    }
+                    $ids[] = $model;
                 }
             }
             $cursor = $payload['nextPageToken'] ?? (($payload['has_more'] ?? false) ? ($payload['last_id'] ?? null) : null);
@@ -220,7 +234,7 @@ return $out;
     public function headers(Provider $p, ?string $key): array
     {
         return ['Accept' => 'application/json'] + match ($p->type) {
-            'google' => $key ? ['x-goog-api-key' => $key] : [], 'anthropic' => ['x-api-key' => $key ?? '', 'anthropic-version' => '2023-06-01'],default => $key ? ['Authorization' => 'Bearer '.$key] : []
+            'google', 'google_vertex' => $key ? ['x-goog-api-key' => $key] : [], 'anthropic' => ['x-api-key' => $key ?? '', 'anthropic-version' => '2023-06-01'],default => $key ? ['Authorization' => 'Bearer '.$key] : []
         };
     }
 }

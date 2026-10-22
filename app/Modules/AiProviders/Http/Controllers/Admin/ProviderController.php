@@ -22,19 +22,24 @@ class ProviderController extends AdminController
 
     public function create()
     {
-        return $this->response($this->form(['id' => null, 'name' => '', 'type' => 'google', 'kind' => 'llm', 'base_url' => '', 'models' => '', 'default_model' => '', 'vision_models' => '', 'reasoning_models' => '', 'enabled' => true, 'is_default' => false, 'key_count' => 0]));
+        return $this->response($this->form(['id' => null, 'name' => '', 'type' => 'google', 'kind' => 'llm', 'base_url' => '', 'models' => '', 'default_model' => '', 'vision_models' => '', 'reasoning_models' => '', 'enabled' => true, 'is_default' => false, 'key_count' => 0]), '@RAW:modules.providers.form');
     }
 
     public function edit(string $id)
     {
-        return $this->response($this->form($this->providers->form(Provider::whereNull('user_id')->findOrFail($id))));
+        return $this->response($this->form($this->providers->form(Provider::whereNull('user_id')->findOrFail($id))), '@RAW:modules.providers.form');
     }
 
     private function form(array $provider): array
     {
-        $types = array_map(fn ($value, $meta) => ['value' => $value, 'label' => $meta['label'], 'kind' => $meta['kind'], 'base' => $meta['base']], array_keys(ProviderCatalog::TYPES), ProviderCatalog::TYPES);
+        $types = array_map(fn ($value, $meta) => ['value' => $value, 'label' => $meta['label'], 'kind' => $meta['kind'], 'base_url_editable' => ProviderCatalog::editableBaseUrl($value)], array_keys(ProviderCatalog::TYPES), ProviderCatalog::TYPES);
 
+        $provider['base_url_editable'] = ProviderCatalog::editableBaseUrl($provider['type']);
         $provider['keys_hint'] = $provider['key_count'] ? 'Đã lưu '.$provider['key_count'].' key. Để trống để giữ nguyên.' : 'Mỗi key một dòng.';
+        $provider['model_ids'] = array_values(array_filter(explode("\n", $provider['models'])));
+        $provider['model_choices'] = array_map(fn ($id) => ['id' => $id, 'selected' => true, 'stale' => false,
+            'vision' => in_array($id, explode("\n", $provider['vision_models']), true),
+            'reasoning' => in_array($id, explode("\n", $provider['reasoning_models']), true)], $provider['model_ids']);
 
         return ['provider' => $provider, 'types' => $types];
     }

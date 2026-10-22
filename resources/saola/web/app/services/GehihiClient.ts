@@ -1,6 +1,8 @@
+import { modelIds, modelChoices, toggleModel, type ModelField } from '@app/ProviderModels';
+
 type Data = Record<string, any>;
 export class GehihiClient {
-    state: Data = { loading: true, busy: false, error: '', notice: '', locale: 'vi', theme: 'system', workspace: {}, user: null, projects: [], conversations: [], files: [], catalog: [], models: [], providers: [], providerTypes: {}, conversation: null, project: null, messages: [], visibleMessages: [], run: null, mode: 'chat', thinking: 'auto', selectedModel: '', searchProvider: '', selectedFiles: [], modal: '', editProvider: {}, editProject: {}, systemProviders: false, probe: null, search: '', archived: false, mobileNav: false, usage: {}, sourcePanel: false, advanced: false, fallbacks: [], includeDomains: '', excludeDomains: '', language: 'vi', country: 'vn', import_available: false, resetToken: '', resetEmail: '', researchNote: '' };
+    state: Data = { loading: true, busy: false, error: '', notice: '', locale: 'vi', theme: 'system', workspace: {}, user: null, projects: [], conversations: [], files: [], catalog: [], models: [], providers: [], providerTypes: {}, providerModelCatalog: null, providerModelFilter: '', providerModelChoices: [], providerSelectedModels: [], conversation: null, project: null, messages: [], visibleMessages: [], run: null, mode: 'chat', thinking: 'auto', selectedModel: '', searchProvider: '', selectedFiles: [], modal: '', editProvider: {}, editProject: {}, systemProviders: false, probe: null, search: '', archived: false, mobileNav: false, usage: {}, sourcePanel: false, advanced: false, fallbacks: [], includeDomains: '', excludeDomains: '', language: 'vi', country: 'vn', import_available: false, resetToken: '', resetEmail: '', researchNote: '' };
     private polling?: ReturnType<typeof setTimeout>;
     private disposed = false;
     private requestId?: string;
@@ -17,6 +19,8 @@ export class GehihiClient {
         this.state.visibleMessages = chain;
         this.state.models = this.state.catalog.filter((p: Data) => p.kind === 'llm').flatMap((p: Data) => p.models.map((id: string) => ({ value: p.id + '|' + id, label: (p.scope === 'system' ? 'Hệ thống' : 'Của bạn') + ' · ' + p.name + ' · ' + id })));
         this.state.history = this.historyItems(); this.state.availableFiles = this.availableFiles(); this.state.typeOptions = Object.entries(this.state.providerTypes).map(([value, meta]: [string, any]) => ({ value, label: meta.label }));
+        this.state.providerSelectedModels = modelIds(this.state.editProvider.models);
+        this.state.providerModelChoices = modelChoices(this.state.providerModelCatalog, this.state.editProvider, this.state.providerModelFilter);
         this.emit({ ...this.state });
     }
     async api(path: string, method = 'GET', body?: any): Promise<any> {
@@ -158,16 +162,38 @@ export class GehihiClient {
         this.patch({ modal: 'settings', systemProviders: system, probe: null, editProvider: {}, providers: [] });
         if (this.state.user) await this.attempt(async () => { const data = await this.api('/providers' + (system ? '?system=1' : '')); this.patch({ providers: data.providers, providerTypes: data.types, usage: await this.api('/usage') }); });
     }
-    editProvider(provider?: Data) { this.patch({ modal: 'provider', editProvider: provider ? { ...provider, models: provider.models.join('\n'), api_keys: '', vision_models: provider.models.filter((id: string) => provider.capabilities?.models?.[id]?.vision ?? provider.capabilities?.vision).join('\n'), reasoning_models: provider.models.filter((id: string) => provider.capabilities?.models?.[id]?.reasoning ?? provider.capabilities?.reasoning).join('\n') } : { name: '', type: 'google', base_url: '', models: '', api_keys: '', enabled: true, is_default: false }, probe: null }); }
+    editProvider(provider?: Data) { this.patch({ modal: 'provider', providerModelCatalog: null, providerModelFilter: '', editProvider: provider ? { ...provider, models: provider.models.join('\n'), api_keys: '', vision_models: provider.models.filter((id: string) => provider.capabilities?.models?.[id]?.vision ?? provider.capabilities?.vision).join('\n'), reasoning_models: provider.models.filter((id: string) => provider.capabilities?.models?.[id]?.reasoning ?? provider.capabilities?.reasoning).join('\n') } : { name: '', type: 'google', base_url: '', models: '', api_keys: '', enabled: true, is_default: false }, probe: null }); }
+    changeProviderType(event: Event) {
+        const form = (event.target as HTMLElement).closest('form')!;
+        const data = this.providerData(form), type = (event.target as HTMLSelectElement).value;
+        this.patch({ editProvider: { ...this.state.editProvider, ...data, type, base_url: '', api_keys: '', clear_keys: false, models: '', default_model: '', vision_models: '', reasoning_models: '' }, providerModelCatalog: null, providerModelFilter: '', probe: null });
+    }
+    filterProviderModels(event: Event) {
+        const form = (event.target as HTMLElement).closest('form')!;
+        this.patch({ editProvider: { ...this.state.editProvider, ...this.providerData(form) }, providerModelFilter: (event.target as HTMLInputElement).value });
+    }
+    selectProviderModel(event: Event, field: ModelField, id: string) {
+        const form = (event.target as HTMLElement).closest('form')!;
+        this.patch({ editProvider: toggleModel({ ...this.state.editProvider, ...this.providerData(form) }, field, id, (event.target as HTMLInputElement).checked) });
+    }
+    addProviderModel(event: Event) {
+        const form = (event.target as HTMLElement).closest('form')!;
+        const input = form.querySelector<HTMLInputElement>('[data-model-id]')!;
+        let next = { ...this.state.editProvider, ...this.providerData(form) };
+        for (const id of modelIds(input.value)) next = toggleModel(next, 'models', id, true);
+        input.value = '';
+        this.patch({ editProvider: next });
+    }
     providerData(form: HTMLFormElement): Data {
         const data: Data = Object.fromEntries(new FormData(form));
         for (const name of ['enabled', 'is_default', 'vision', 'reasoning', 'clear_keys']) data[name] = data[name] === 'on';
+        if (!this.state.providerTypes[data.type]?.base_url_editable) delete data.base_url;
         return { ...data, system: this.state.systemProviders, id: this.state.editProvider.id || null };
     }
-    async saveProvider(event: Event) { event.preventDefault(); const data = this.providerData(event.currentTarget as HTMLFormElement); this.patch({ editProvider: data }); await this.attempt(async () => { await this.api('/providers' + (data.id ? '/' + data.id : ''), data.id ? 'PATCH' : 'POST', data); await this.refresh(); await this.settings(this.state.systemProviders); this.patch({ notice: 'Đã lưu provider. Key được mã hóa phía máy chủ.' }); }); }
+    async saveProvider(event: Event) { event.preventDefault(); const data = this.providerData(event.currentTarget as HTMLFormElement); this.patch({ editProvider: { ...this.state.editProvider, ...data } }); await this.attempt(async () => { await this.api('/providers' + (data.id ? '/' + data.id : ''), data.id ? 'PATCH' : 'POST', data); await this.refresh(); await this.settings(this.state.systemProviders); this.patch({ notice: 'Đã lưu provider. Key được mã hóa phía máy chủ.' }); }); }
     async probe(event: Event, kind: string) {
-        const form = (event.currentTarget as HTMLElement).closest('form')!; const data = this.providerData(form); this.patch({ editProvider: data });
-        await this.attempt(async () => { const result = await this.api('/providers/' + kind, 'POST', data); if (kind === 'discover') this.patch({ editProvider: { ...data, models: Array.from(new Set([...data.models.split(/[\n,]+/).filter(Boolean), ...result])).join('\n') }, probe: { message: 'Đã tải ' + result.length + ' model; chưa lưu cấu hình.' } }); else this.patch({ probe: result }); });
+        const form = (event.currentTarget as HTMLElement).closest('form')!; const data = this.providerData(form); this.patch({ editProvider: { ...this.state.editProvider, ...data } });
+        await this.attempt(async () => { const result = await this.api('/providers/' + kind, 'POST', data); if (kind === 'discover') this.patch({ providerModelCatalog: result, probe: { message: 'Đã tải ' + result.length + ' model. Tick các model muốn sử dụng rồi lưu provider.' } }); else this.patch({ probe: result }); });
     }
     async removeProvider(id: string) { if (!confirm('Xóa provider này? Các lựa chọn đang trỏ đến nó sẽ không chạy được.')) return; await this.attempt(async () => { await this.api('/providers/' + id + (this.state.systemProviders ? '?system=1' : ''), 'DELETE'); await this.refresh(); await this.settings(this.state.systemProviders); }); }
     async auth(event: Event, action: string) {

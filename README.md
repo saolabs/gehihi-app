@@ -31,10 +31,11 @@ Mở [Gehihi trên localhost](http://127.0.0.1:8010). Môi trường hiện tạ
 - Tạo tài khoản từ Cài đặt để thêm provider cá nhân. Người đăng ký đầu tiên có quyền người dùng thông thường.
 - Cấp quyền quản trị bằng `php artisan gehihi:admin your-email@example.com`. Lệnh sẽ hỏi mật khẩu nếu tài khoản chưa tồn tại.
 - Trang quản trị ở `/admin`: Tổng quan (lượt chạy, token, lỗi theo ngày), Provider (provider dùng chung cho khách, tình trạng key), Người dùng (cấp/thu quyền) và Hạn mức (lưu ở bảng `app_settings`, áp dụng ngay cả với worker đang chạy). Cần một provider LLM; Tra cứu web/Research cần thêm provider tìm kiếm độc lập.
-- Form cho phép tải model, nhập model thủ công, kiểm tra từng key, đặt mặc định, chỉ định model nhận ảnh/suy luận và bật/tắt. Để trống ô key khi sửa sẽ giữ key cũ.
+- Form quản trị và cá nhân có lưới tick model, bộ lọc, thêm ID thủ công, chọn mặc định và đánh dấu nhận ảnh/suy luận theo từng model. Tải catalog không tự bật toàn bộ model; model đã lưu nhưng không còn trong catalog vẫn hiện để bỏ chọn. Để trống ô key khi sửa sẽ giữ key cũ.
+- Google Cloud (Vertex AI) dùng API key của [Vertex AI Express Mode](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview), endpoint mặc định `https://aiplatform.googleapis.com/v1/publishers/google`. Endpoint cố định nằm trong code, không nhập hoặc lưu Base URL cho các provider cấu hình sẵn; chỉ OpenAI-compatible và SearXNG cho nhập URL riêng. Hỗ trợ kiểm tra key, chat/ảnh đầu vào và stream Gemini. Nút tải model đọc catalog Model Garden có phân trang; danh sách này không xác nhận quyền chạy của key. Nếu key không có quyền đọc catalog, thêm model ID thủ công rồi bấm kiểm tra. Chưa xác minh bằng API key Vertex thật.
 - Model và key thật không được chép từ `seo-expert`. App hiện chưa có provider thật được cài sẵn.
 
-Adapter văn bản: Gemini, OpenAI, Anthropic và API OpenAI-compatible; DeepSeek/Cerebras/NVIDIA chat qua transport tương thích. Tìm kiếm: SearXNG, Tavily, Serper, SerpAPI, Brave, Exa. Native web search, Vertex, tạo ảnh và hệ agent tùy biến chưa triển khai.
+Adapter văn bản: Gemini, Vertex AI (Express Mode), OpenAI, Anthropic và API OpenAI-compatible; DeepSeek/Cerebras/NVIDIA chat qua transport tương thích. Tìm kiếm: SearXNG, Tavily, Serper, SerpAPI, Brave, Exa. Native web search, Vertex bằng service account/OAuth, tạo ảnh và hệ agent tùy biến chưa triển khai.
 
 ## Hành vi chính
 
