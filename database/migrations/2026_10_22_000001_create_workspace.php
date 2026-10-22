@@ -8,20 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $t) {
-            $t->uuid('id')->primary();
-            $t->string('name');
-            $t->string('email')->unique();
-            $t->string('password');
-            $t->boolean('is_admin')->default(false);
-            $t->rememberToken();
-            $t->timestamps();
-        });
-        Schema::create('password_reset_tokens', function (Blueprint $t) {
-            $t->string('email')->primary();
-            $t->string('token');
-            $t->timestamp('created_at')->nullable();
-        });
         Schema::create('workspaces', function (Blueprint $t) {
             $t->uuid('id')->primary();
             $t->foreignUuid('user_id')->nullable()->unique()->constrained()->cascadeOnDelete();
@@ -143,29 +129,11 @@ return new class extends Migration
             $t->timestamps();
             $t->unique(['run_id', 'operation_key']);
         });
-        Schema::create('jobs', function (Blueprint $t) {
-            $t->bigIncrements('id');
-            $t->string('queue')->index();
-            $t->longText('payload');
-            $t->unsignedTinyInteger('attempts');
-            $t->unsignedInteger('reserved_at')->nullable();
-            $t->unsignedInteger('available_at');
-            $t->unsignedInteger('created_at');
-        });
-        Schema::create('failed_jobs', function (Blueprint $t) {
-            $t->id();
-            $t->string('uuid')->unique();
-            $t->text('connection');
-            $t->text('queue');
-            $t->longText('payload');
-            $t->longText('exception');
-            $t->timestamp('failed_at')->useCurrent();
-        });
     }
 
     public function down(): void
     {
-        foreach (['failed_jobs', 'jobs', 'run_operations', 'generation_runs', 'files', 'provider_key_health', 'providers', 'messages', 'conversations', 'instruction_revisions', 'projects', 'workspaces', 'password_reset_tokens', 'users'] as $table) {
+        foreach (['run_operations', 'generation_runs', 'files', 'provider_key_health', 'providers', 'messages', 'conversations', 'instruction_revisions', 'projects', 'workspaces'] as $table) {
             Schema::dropIfExists($table);
         }
     }
