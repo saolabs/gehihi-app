@@ -13,7 +13,7 @@ class UserDirectory
 {
     public function users(string $q, string $me): array
     {
-        $users = User::when($q !== '', fn ($query) => $query->where(fn ($w) => $w->where('name', 'like', "%$q%")->orWhere('email', 'like', "%$q%")))
+        $users = User::when($q !== '', fn ($query) => $query->where(fn ($w) => $w->whereLike('name', "%$q%")->orWhereLike('email', "%$q%")))
             ->orderByDesc('created_at')->limit(200)->get();
         $workspaces = Workspace::whereIn('user_id', $users->pluck('id'))->pluck('id', 'user_id');
         $runs = GenerationRun::whereIn('workspace_id', $workspaces->values())->where('created_at', '>=', now()->subDays(29)->startOfDay())

@@ -54,7 +54,7 @@ class WorkspaceRepository implements WorkspaceRepositoryInterface
     {
         return Conversation::where('workspace_id', $ws)->where('temporary', false)->when($search !== '', function ($q) use ($search) {
             $q->where(function ($q) use ($search) {
-                $q->where('title', 'like', '%'.$search.'%')->orWhereIn('id', Message::select('conversation_id')->where('content', 'like', '%'.$search.'%'));
+                $q->whereLike('title', '%'.$search.'%')->orWhereIn('id', Message::select('conversation_id')->whereLike('content', '%'.$search.'%'));
             });
         })->orderByDesc('pinned')->latest('updated_at')->limit(200)->get()->toArray();
     }

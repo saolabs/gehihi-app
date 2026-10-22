@@ -4,14 +4,14 @@ Không gian chat và Research đa provider, xây trên Laravel 13 và Saola. Đ�
 
 ## Chạy ứng dụng
 
-Yêu cầu PHP tương thích `composer.lock` (lock hiện tại cần PHP 8.4.1 trở lên), Composer, Node 22+, SQLite, PHP cURL/DOM/mbstring/fileinfo. PDF văn bản cần `pdftotext` của Poppler; thiếu chương trình này app báo rõ tệp chưa đọc được. Không hỗ trợ OCR.
+Yêu cầu PHP tương thích `composer.lock` (lock hiện tại cần PHP 8.4.1 trở lên), Composer, Node 22+, Docker (PostgreSQL 16), PHP cURL/DOM/mbstring/fileinfo/pdo_pgsql. PDF văn bản cần `pdftotext` của Poppler; thiếu chương trình này app báo rõ tệp chưa đọc được. Không hỗ trợ OCR.
 
 ```sh
 composer install
 npm ci
-cp .env.example .env
+cp .env.example .env           # đặt DB_PASSWORD trước khi chạy Postgres
 php artisan key:generate
-touch database/database.sqlite
+docker compose up -d           # PostgreSQL ở 127.0.0.1:5433, kèm DB gehihi_testing cho phpunit
 php artisan migrate
 npm run build:all
 php artisan saola:assets
@@ -24,7 +24,7 @@ php artisan serve --host=127.0.0.1 --port=8010 --no-reload
 php artisan queue:work --tries=1 --timeout=300
 ```
 
-Mở [Gehihi trên localhost](http://127.0.0.1:8010). Môi trường hiện tại đã có `.env`, cơ sở dữ liệu và assets; giữ nguyên `APP_KEY` khi tiếp tục dùng dữ liệu hiện có vì key provider được mã hóa bằng khóa này.
+Mở [Gehihi trên localhost](http://127.0.0.1:8010). Môi trường hiện tại đã có `.env` và assets; giữ nguyên `APP_KEY` khi tiếp tục dùng dữ liệu hiện có vì key provider được mã hóa bằng khóa này.
 
 ## Cấu hình AI và tìm kiếm
 
@@ -62,12 +62,12 @@ Nguồn giao diện: `resources/saola/{web,admin}/views/**/*.sao`; view admin nh
 
 ```sh
 npm run build:all
-php artisan test
+php artisan test               # chạy trên PostgreSQL gehihi_testing, cần docker compose up -d
 npm run test:ui
 composer validate --no-check-publish
 ```
 
-Worker phải được khởi động lại sau thay đổi backend. Trên máy chủ cần process supervisor cho worker và cron gọi `php artisan schedule:run` mỗi phút. Dùng HTTPS, `APP_DEBUG=false`, mail transport thật cho khôi phục mật khẩu; sao lưu cơ sở dữ liệu và `APP_KEY`. File cache/SQLite mặc định phục vụ một máy chủ; cần cấu hình hạ tầng chia sẻ trước khi chạy nhiều replica.
+Worker phải được khởi động lại sau thay đổi backend. Trên máy chủ cần process supervisor cho worker và cron gọi `php artisan schedule:run` mỗi phút. Dùng HTTPS, `APP_DEBUG=false`, mail transport thật cho khôi phục mật khẩu; sao lưu cơ sở dữ liệu và `APP_KEY`. Cache/session dạng file mặc định phục vụ một máy chủ; cần cấu hình hạ tầng chia sẻ trước khi chạy nhiều replica.
 
 `GEHIHI_EGRESS_ALLOWLIST` chỉ dùng cho host self-host được quản trị tin cậy; không cần bật cho provider HTTPS công khai. Các fixture browser trong `tests/Browser` dùng cơ sở dữ liệu tạm riêng, không phải provider sản phẩm.
 

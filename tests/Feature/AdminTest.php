@@ -69,6 +69,7 @@ class AdminTest extends TestCase
         $this->actingAs($admin)->putJson('/admin/users/'.$admin->id, ['is_admin' => false])->assertStatus(422);
         $this->assertTrue($admin->fresh()->is_admin);
         $this->assertCount(1, $this->actingAs($admin)->getJson('/admin/users?q=admin@')->json('data.users'));
+        $this->assertCount(1, $this->actingAs($admin)->getJson('/admin/users?q=ADMIN@')->json('data.users')); // không phân biệt hoa thường trên mọi DB
     }
 
     public function test_limits_are_validated_saved_and_applied_to_config(): void
