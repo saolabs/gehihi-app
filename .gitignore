@@ -38,3 +38,6 @@ database/database.sqlite-journal
 
 /storage/app/private/*
 /.codebase-memory/
+
+# Thông tin máy chủ deploy, không đưa lên git (repo public)
+.deploy.env

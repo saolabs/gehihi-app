@@ -18,7 +18,8 @@
         "check": "npm run build:views && npm run typecheck",
         "build:admin": "npm run check && VITE_CONTEXT=admin vite build",
         "build:views:admin": "sao-compile admin",
-        "test:ui": "vitest run --config tests/frontend/vitest.config.mjs"
+        "test:ui": "vitest run --config tests/frontend/vitest.config.mjs",
+        "deploy": "bash scripts/deploy.sh"
     },
     "devDependencies": {
         "@emnapi/wasi-threads": "^1.2.3",
