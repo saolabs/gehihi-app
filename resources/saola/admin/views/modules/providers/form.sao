@@ -112,7 +112,7 @@
         setProbe([]);
         setMessage('');
         return run(async () => {
-            const data = await send('post', '/admin/providers/' + action, payload(form));
+            const data = await send('post', '/admin/providers/' + action, payload(form), 70000);
             if (action === 'discover') {
                 setCatalog(data.models); syncChoices();
                 setMessage('Đã tải ' + data.models.length + ' model. Tick các model muốn sử dụng rồi lưu provider.');

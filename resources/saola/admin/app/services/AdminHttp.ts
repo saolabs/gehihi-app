@@ -2,7 +2,8 @@ import { App } from '@saolabs/client';
 
 type Method = 'get' | 'post' | 'put' | 'delete';
 
-const options = () => ({
+const options = (timeout: number) => ({
+    timeout,
     headers: {
         Accept: 'application/json',
         'X-Sao-Response': 'json',
@@ -11,9 +12,9 @@ const options = () => ({
 });
 
 /** Gọi route thao tác của module admin; trả phần `data` của response, lỗi validate gộp thành một câu dễ đọc. */
-export async function send<T = any>(method: Method, url: string, body?: Record<string, any>): Promise<T> {
+export async function send<T = any>(method: Method, url: string, body?: Record<string, any>, timeout = 10000): Promise<T> {
     try {
-        const response: any = method === 'delete' ? await App.Http.delete(url, options()) : method === 'get' ? await App.Http.get(url, null, options()) : await App.Http[method](url, body ?? {}, options());
+        const response: any = method === 'delete' ? await App.Http.delete(url, options(timeout)) : method === 'get' ? await App.Http.get(url, null, options(timeout)) : await App.Http[method](url, body ?? {}, options(timeout));
         return response.data.data;
     } catch (error: any) {
         const errors = error?.response?.data?.errors;
