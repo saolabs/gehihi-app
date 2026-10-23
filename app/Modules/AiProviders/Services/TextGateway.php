@@ -23,9 +23,10 @@ class TextGateway
                 [$url,$body] = $this->request($p, $model, $messages, $limit, $thinking);
                 $r = $this->http->send('POST', $url, $this->providers->headers($p, $key) + ['Content-Type' => 'application/json'], $body);
                 if (! $r->successful()) {
-                    throw new ProviderFailure(match ($r->status()) {
+                    $status = ProviderFailure::status($r);
+                    throw new ProviderFailure(match ($status) {
                         401,403 => 'Provider từ chối API key hoặc quyền model.',404,410 => 'Model không tồn tại hoặc đã ngừng phục vụ.',429 => 'Provider đang giới hạn tốc độ hoặc hết quota.',default => 'Provider không hoàn tất yêu cầu.'
-                    }.' HTTP '.$r->status(), $r->status());
+                    }.' HTTP '.$r->status(), $status);
                 }
                 $text = '';
                 $tokens = 0;

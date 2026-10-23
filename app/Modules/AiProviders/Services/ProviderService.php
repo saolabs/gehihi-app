@@ -201,6 +201,9 @@ return $out;
             }
             $r = $this->http->send('GET', $base.($query ? '?'.http_build_query($query) : ''), $headers);
             if (! $r->successful()) {
+                if (ProviderFailure::status($r) === 401) {
+                    throw new ProviderFailure('Provider từ chối API key này. Kiểm tra lại key (Gemini: tạo ở Google AI Studio).', 401);
+                }
                 throw new ProviderFailure('Không tải được danh sách model: HTTP '.$r->status(), $r->status());
             }
             $payload = $this->http->json($r);

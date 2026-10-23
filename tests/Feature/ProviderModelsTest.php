@@ -79,10 +79,12 @@ class ProviderModelsTest extends TestCase
 
     public function test_curated_vertex_key_probes_leave_room_for_text_without_changing_capabilities(): void
     {
-        foreach (ProviderCatalog::VERTEX_MODELS as $model) {
-            $p = new Provider(['name' => 'Probe', 'type' => 'google_vertex', 'kind' => 'llm', 'base_url' => '', 'secrets' => ['probe-key'], 'models' => [$model], 'default_model' => $model, 'capabilities' => ['models' => [$model => ['reasoning' => false]]]]);
+        $cases = [...array_map(fn ($m) => ['google_vertex', $m], ProviderCatalog::VERTEX_MODELS), ['google', 'gemini-3.5-flash'], ['google', 'gemini-2.5-flash']];
+        foreach ($cases as [$type, $model]) {
+            $p = new Provider(['name' => 'Probe', 'type' => $type, 'kind' => 'llm', 'base_url' => '', 'secrets' => ['probe-key'], 'models' => [$model], 'default_model' => $model, 'capabilities' => ['models' => [$model => ['reasoning' => false]]]]);
             Http::fake(function ($r) {
-                $hasBudget = $r['generationConfig']['maxOutputTokens'] >= 1024 && $r['generationConfig']['thinkingConfig']['thinkingLevel'] === 'low';
+                $thinking = $r['generationConfig']['thinkingConfig'] ?? [];
+                $hasBudget = $r['generationConfig']['maxOutputTokens'] >= 1024 && (($thinking['thinkingLevel'] ?? null) === 'low' || ($thinking['thinkingBudget'] ?? null) === 0);
                 $event = ['candidates' => [['content' => ['parts' => $hasBudget ? [['text' => 'OK']] : []], 'finishReason' => $hasBudget ? 'STOP' : 'MAX_TOKENS']]];
 
                 return Http::response('data: '.json_encode($event)."\n\n", 200, ['Content-Type' => 'text/event-stream']);
@@ -92,6 +94,29 @@ class ProviderModelsTest extends TestCase
             $this->assertSame('OK', $results[0]['text']);
             $this->assertFalse($p->capabilities['models'][$model]['reasoning']);
         }
+    }
+
+    public function test_gemini_invalid_key_400_is_reported_as_rejected_key_and_rotates(): void
+    {
+        $invalid = ['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'details' => [['reason' => 'API_KEY_INVALID']]]];
+        Http::fake(fn ($r) => $r->hasHeader('x-goog-api-key', 'bad-key')
+            ? Http::response($invalid, 400)
+            : Http::response('data: '.json_encode(['candidates' => [['content' => ['parts' => [['text' => 'OK']]], 'finishReason' => 'STOP']]])."\n\n", 200, ['Content-Type' => 'text/event-stream']));
+        $form = ['name' => 'Gemini', 'type' => 'google', 'api_keys' => 'bad-key', 'models' => 'gemini-2.0-flash', 'default_model' => 'gemini-2.0-flash'];
+        $service = app(\App\Modules\AiProviders\Services\ProviderService::class);
+        try {
+            $service->discover(null, null, $form);
+            $this->fail('discover phải báo key sai');
+        } catch (\App\Modules\AiProviders\Services\ProviderFailure $e) {
+            $this->assertSame(401, $e->status);
+            $this->assertStringContainsString('từ chối API key', $e->getMessage());
+        }
+        $results = app(\App\Modules\AiProviders\Services\ProviderProbe::class)->test($service->draft(null, null, [...$form, 'api_keys' => "bad-key\ngood-key"]));
+        $this->assertStringContainsString('từ chối API key', $results[0]['message']);
+        $this->assertTrue($results[1]['ok']);
+        $saved = Provider::create(['name' => 'G', 'type' => 'google', 'kind' => 'llm', 'base_url' => '', 'secrets' => ['bad-key', 'good-key'], 'models' => ['gemini-2.0-flash'], 'default_model' => 'gemini-2.0-flash']);
+        $out = app(\App\Modules\AiProviders\Services\TextGateway::class)->generate($saved, 'gemini-2.0-flash', [['role' => 'user', 'content' => 'hi']], 64, fn () => null, fn () => null);
+        $this->assertSame('OK', $out['text']); // key sai bị bỏ qua, chuyển sang key kế
     }
 
     public function test_admin_form_renders_saved_models_without_client_only_helpers(): void
