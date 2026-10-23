@@ -9,7 +9,7 @@ class TextGateway
 {
     public function __construct(private OutboundHttp $http, private ProviderService $providers, private ProviderRepositoryInterface $repo) {}
 
-    public function generate(Provider $p, string $model, array $messages, int $limit, callable $delta, callable $guard, bool $probe = false): array
+    public function generate(Provider $p, string $model, array $messages, int $limit, callable $delta, callable $guard, bool $probe = false, string $thinking = 'auto'): array
     {
         $emitted = false;
         $last = null;
@@ -20,7 +20,7 @@ class TextGateway
         foreach ($keys as $key) {
             $guard();
             try {
-                [$url,$body] = $this->request($p, $model, $messages, $limit);
+                [$url,$body] = $this->request($p, $model, $messages, $limit, $thinking);
                 $r = $this->http->send('POST', $url, $this->providers->headers($p, $key) + ['Content-Type' => 'application/json'], $body);
                 if (! $r->successful()) {
                     throw new ProviderFailure(match ($r->status()) {
@@ -145,9 +145,21 @@ continue;
         throw $last ?? new ProviderFailure('Không có key khả dụng.');
     }
 
-    private function request(Provider $p, string $model, array $messages, int $limit): array
+    /**
+     * Mức suy luận gửi cho hãng: 'fast' → low, 'reasoning' → high, 'auto' → để hãng tự quyết.
+     * Chỉ áp cho model chủ cấu hình đã khai báo hỗ trợ suy luận: model thường báo lỗi khi nhận tham số lạ.
+     */
+    private function effort(Provider $p, string $model, string $thinking): ?string
+    {
+        $capabilities = $p->capabilities['models'][$model] ?? $p->capabilities ?? [];
+
+        return $thinking !== 'auto' && ($capabilities['reasoning'] ?? false) ? ($thinking === 'reasoning' ? 'high' : 'low') : null;
+    }
+
+    private function request(Provider $p, string $model, array $messages, int $limit, string $thinking = 'auto'): array
     {
         $base = ProviderCatalog::baseUrl($p->type, $p->base_url);
+        $effort = $this->effort($p, $model, $thinking);
         $system = implode("\n\n", array_column(array_filter($messages, fn ($m) => $m['role'] === 'system'), 'content'));
         $turns = array_values(array_filter($messages, fn ($m) => $m['role'] !== 'system'));
         if (in_array($p->type, ['google', 'google_vertex'], true)) {
@@ -160,7 +172,15 @@ continue;
 return ['role' => $m['role'] === 'assistant' ? 'model' : 'user', 'parts' => $parts];
             }, $turns);
 
-            return [$base.'/models/'.rawurlencode($model).':streamGenerateContent?alt=sse', ['systemInstruction' => ['parts' => [['text' => $system]]], 'contents' => $contents, 'generationConfig' => ['maxOutputTokens' => $limit]]];
+            $config = ['maxOutputTokens' => $limit];
+            if ($effort) {
+                // Gemini 3 nhận thinkingLevel; 2.5 nhận ngân sách token (Pro không tắt hẳn được, tối thiểu 128).
+                $config['thinkingConfig'] = str_starts_with($model, 'gemini-3')
+                    ? ['thinkingLevel' => $effort]
+                    : ['thinkingBudget' => $effort === 'high' ? min(24576, max(1024, intdiv($limit, 2))) : (str_contains($model, 'pro') ? 128 : 0)];
+            }
+
+            return [$base.'/models/'.rawurlencode($model).':streamGenerateContent?alt=sse', ['systemInstruction' => ['parts' => [['text' => $system]]], 'contents' => $contents, 'generationConfig' => $config]];
         }
         if ($p->type === 'anthropic') {
             $turns = array_map(function ($m) {
@@ -172,7 +192,13 @@ return ['role' => $m['role'] === 'assistant' ? 'model' : 'user', 'parts' => $par
 return ['role' => $m['role'], 'content' => $parts];
             }, $turns);
 
-            return [$base.'/messages', ['model' => $model, 'max_tokens' => $limit, 'system' => $system, 'messages' => $turns, 'stream' => true]];
+            $body = ['model' => $model, 'max_tokens' => $limit, 'system' => $system, 'messages' => $turns, 'stream' => true];
+            // Extended thinking cần budget ≥ 1024 và nhỏ hơn max_tokens; 'low' giữ mặc định (không suy nghĩ thêm).
+            if ($effort === 'high' && $limit > 2048) {
+                $body['thinking'] = ['type' => 'enabled', 'budget_tokens' => max(1024, intdiv($limit, 2))];
+            }
+
+            return [$base.'/messages', $body];
         }
         $turns = array_map(function ($m) {
             $parts = [['type' => 'text', 'text' => $m['content']]];
@@ -183,6 +209,12 @@ return ['role' => $m['role'], 'content' => $parts];
 return ['role' => $m['role'], 'content' => count($parts) > 1 ? $parts : $m['content']];
         }, $turns);
 
-        return [$base.'/chat/completions', ['model' => $model, 'messages' => [['role' => 'system', 'content' => $system], ...$turns], $p->type === 'openai' ? 'max_completion_tokens' : 'max_tokens' => $limit, 'stream' => true, 'stream_options' => ['include_usage' => true]]];
+        $body = ['model' => $model, 'messages' => [['role' => 'system', 'content' => $system], ...$turns], $p->type === 'openai' ? 'max_completion_tokens' : 'max_tokens' => $limit, 'stream' => true, 'stream_options' => ['include_usage' => true]];
+        // Chỉ OpenAI chính hãng có reasoning_effort chuẩn; API tương thích mỗi nơi một kiểu nên không đoán.
+        if ($effort && $p->type === 'openai') {
+            $body['reasoning_effort'] = $effort;
+        }
+
+        return [$base.'/chat/completions', $body];
     }
 }

@@ -2,8 +2,10 @@ import { modelIds, modelChoices, toggleModel, type ModelField } from '@app/Provi
 
 type Data = Record<string, any>;
 export class GehihiClient {
-    state: Data = { loading: true, busy: false, error: '', notice: '', locale: 'vi', theme: 'system', workspace: {}, user: null, projects: [], conversations: [], files: [], catalog: [], models: [], providers: [], providerTypes: {}, providerModelCatalog: null, providerModelFilter: '', providerModelChoices: [], providerSelectedModels: [], conversation: null, project: null, messages: [], visibleMessages: [], run: null, mode: 'chat', thinking: 'auto', selectedModel: '', searchProvider: '', selectedFiles: [], modal: '', editProvider: {}, editProject: {}, systemProviders: false, probe: null, search: '', archived: false, mobileNav: false, usage: {}, sourcePanel: false, advanced: false, fallbacks: [], includeDomains: '', excludeDomains: '', language: 'vi', country: 'vn', import_available: false, resetToken: '', resetEmail: '', researchNote: '' };
+    state: Data = { loading: true, busy: false, error: '', notice: '', locale: 'vi', theme: 'system', workspace: {}, user: null, projects: [], conversations: [], files: [], catalog: [], models: [], providers: [], providerTypes: {}, providerModelCatalog: null, providerModelFilter: '', providerModelChoices: [], providerSelectedModels: [], conversation: null, project: null, messages: [], visibleMessages: [], run: null, mode: 'chat', thinking: 'auto', selectedModel: '', searchProvider: '', selectedFiles: [], modal: '', editProvider: {}, editProject: {}, systemProviders: false, probe: null, search: '', archived: false, mobileNav: false, usage: {}, sourcePanel: false, advanced: false, fallbacks: [], includeDomains: '', excludeDomains: '', language: 'vi', country: 'vn', import_available: false, resetToken: '', resetEmail: '', researchNote: '', trashGroups: [] };
     private polling?: ReturnType<typeof setTimeout>;
+    private fileWatch?: ReturnType<typeof setTimeout>;
+    private pendingFiles = new Set<string>();
     private disposed = false;
     private requestId?: string;
     private navigation = 0;
@@ -154,9 +156,37 @@ export class GehihiClient {
     toggleFile(id: string) { this.patch({ selectedFiles: this.state.selectedFiles.includes(id) ? this.state.selectedFiles.filter((f: string) => f !== id) : [...this.state.selectedFiles, id].slice(0, 5) }); }
     async upload(event: Event) {
         const input = event.target as HTMLInputElement; const files = Array.from(input.files || []);
-        await this.attempt(async () => { for (const file of files.slice(0, 5)) { const data = new FormData(); data.append('file', file); if (this.state.project?.id) data.append('project_id', this.state.project.id); const source = await this.api('/files', 'POST', data); if (['ready', 'partial'].includes(source.status)) this.patch({ selectedFiles: [...this.state.selectedFiles, source.id].slice(0, 5) }); else this.patch({ error: source.error }); } await this.refresh(); }); input.value = '';
+        await this.attempt(async () => { for (const file of files.slice(0, 5)) { const data = new FormData(); data.append('file', file); if (this.state.project?.id) data.append('project_id', this.state.project.id); const source = await this.api('/files', 'POST', data); this.pendingFiles.add(source.id); } await this.refresh(); }); input.value = '';
+        this.watchFiles();
+    }
+    /** Tệp được đọc ở worker: hỏi lại tới khi xong, tệp đọc được thì tự chọn cho lượt kế tiếp. */
+    private watchFiles(round = 0) {
+        clearTimeout(this.fileWatch);
+        if (this.disposed || !this.pendingFiles.size) return;
+        for (const file of this.state.files) {
+            if (!this.pendingFiles.has(file.id) || file.status === 'processing') continue;
+            this.pendingFiles.delete(file.id);
+            if (['ready', 'partial'].includes(file.status)) this.patch({ selectedFiles: [...new Set([...this.state.selectedFiles, file.id])].slice(0, 5) });
+            else this.patch({ error: file.name + ': ' + (file.error || 'Chưa đọc được tệp.') });
+        }
+        if (!this.pendingFiles.size) return;
+        if (round >= 80) { this.pendingFiles.clear(); this.patch({ error: 'Tệp vẫn đang được đọc. Kiểm tra worker hàng đợi rồi mở lại danh sách nguồn.' }); return; }
+        this.fileWatch = setTimeout(async () => { try { await this.refresh(); } catch { /* lỗi mạng tạm thời: thử lại vòng sau */ } this.watchFiles(round + 1); }, 1500);
     }
     async removeFile(id: string) { if (!confirm('Xóa tệp khỏi nguồn có thể dùng cho các lượt mới?')) return; await this.attempt(async () => { await this.api('/files/' + id, 'DELETE'); this.patch({ selectedFiles: this.state.selectedFiles.filter((f: string) => f !== id) }); await this.refresh(); }); }
+    async openTrash() { this.patch({ modal: 'trash', trashGroups: [] }); await this.attempt(async () => this.showTrash(await this.api('/trash'))); }
+    private showTrash(trash: Data) {
+        const en = this.state.locale === 'en';
+        const when = (at: string) => new Date(at).toLocaleString(en ? 'en-GB' : 'vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+        const group = (type: string, vi: string, enLabel: string, title: (x: Data) => string, extra: (x: Data) => string = () => '') => ({ type, label: en ? enLabel : vi, items: (trash[type] || []).map((x: Data) => ({ id: x.id, title: title(x), meta: [(en ? 'Deleted ' : 'Xóa lúc ') + when(x.deleted_at), extra(x)].filter(Boolean).join(' · ') })) });
+        this.patch({ trashGroups: [
+            group('conversations', 'Hội thoại', 'Conversations', x => x.title),
+            group('projects', 'Dự án', 'Projects', x => x.name),
+            group('files', 'Tệp', 'Files', x => x.name, x => Math.ceil(x.size / 1024) + ' KB'),
+        ] });
+    }
+    async restoreTrash(type: string, id: string) { await this.attempt(async () => { this.showTrash(await this.api('/trash/' + type + '/' + id + '/restore', 'POST')); await this.refresh(); this.patch({ notice: this.state.locale === 'en' ? 'Restored.' : 'Đã khôi phục.' }); }); }
+    async forgetTrash(type: string, id: string) { if (!confirm(this.state.locale === 'en' ? 'Delete forever? This cannot be undone.' : 'Xóa vĩnh viễn? Không thể hoàn tác.')) return; await this.attempt(async () => this.showTrash(await this.api('/trash/' + type + '/' + id, 'DELETE'))); }
     availableFiles() { return this.state.files.filter((f: Data) => !f.project_id || f.project_id === this.state.project?.id); }
     async settings(system = false) {
         this.patch({ modal: 'settings', systemProviders: system, probe: null, editProvider: {}, providers: [] });
@@ -205,5 +235,5 @@ export class GehihiClient {
     applyTheme(theme: string) { document.documentElement.dataset.theme = theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme; }
     async preference(key: string, value: string) { this.patch({ [key]: value }); if (key === 'theme') this.applyTheme(value); await this.attempt(() => this.api('/preferences', 'PUT', { ...this.state.workspace.preferences, theme: this.state.theme, locale: this.state.locale })); }
     close() { this.patch({ modal: '', editProvider: {}, probe: null }); }
-    destroy() { this.disposed = true; ++this.navigation; clearTimeout(this.polling); window.removeEventListener('popstate', this.pop); }
+    destroy() { this.disposed = true; ++this.navigation; clearTimeout(this.polling); clearTimeout(this.fileWatch); window.removeEventListener('popstate', this.pop); }
 }

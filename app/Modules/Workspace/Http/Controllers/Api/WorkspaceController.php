@@ -91,4 +91,23 @@ class WorkspaceController extends ApiController
 
         return $this->ok();
     }
+
+    public function trash(Request $r)
+    {
+        return $this->ok($this->service->trash($this->ws($r)));
+    }
+
+    public function restore(Request $r, string $type, string $id)
+    {
+        $this->service->restore($this->ws($r), $type, $id);
+
+        return $this->ok($this->service->trash($this->ws($r)));
+    }
+
+    public function forget(Request $r, string $type, string $id)
+    {
+        $this->files->forget($this->ws($r), $type, $id);
+
+        return $this->ok($this->service->trash($this->ws($r)));
+    }
 }

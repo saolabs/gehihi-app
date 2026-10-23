@@ -10,7 +10,7 @@
 | Dự án | CRUD, hướng dẫn có revision; mọi request LLM dùng snapshot hướng dẫn; chuyển hội thoại sang dự án có cảnh báo ngữ cảnh cũ |
 | Chat | Worker gọi streaming provider, lưu nội dung tăng dần; UI cập nhật qua polling; SSE state endpoint; dừng, tạo lại, nhánh, tìm kiếm, ghim/lưu trữ, xuất |
 | Provider | Scope hệ thống/cá nhân; key mã hóa, rotation/cooldown; discovery, kiểm tra từng key trên bản nháp, model mặc định, năng lực theo model; fallback LLM do người dùng chọn |
-| Tệp | TXT/MD/CSV/code UTF-8, PDF văn bản qua Poppler, ảnh cho model vision; giới hạn và trạng thái lỗi/đọc một phần; chọn nguồn theo dự án |
+| Tệp | TXT/MD/CSV/code UTF-8, PDF văn bản qua Poppler, ảnh cho model vision; đọc ở worker (job `ExtractFile`), client tự chọn tệp khi đọc xong; giới hạn và trạng thái lỗi/đọc một phần; chọn nguồn theo dự án |
 | Research | Lập kế hoạch, search adapter độc lập, đọc HTML/text, sổ nguồn, đánh giá độ phủ, bổ sung truy vấn, báo cáo Markdown và nguồn [Sx], checkpoint và tiếp tục |
 | Quản trị/vận hành | CLI cấp admin; cấu hình pool dùng chung; quota số lượt/token/đồng thời; operation ledger; dọn dữ liệu hết hạn |
 
@@ -30,9 +30,9 @@ Chưa chạy xác thực bằng API key thật hoặc deploy qua proxy productio
 
 - Research kiểm tra ID nguồn và URL lấy từ kết quả đã thu thập; chưa kiểm chứng từng nhận định/đoạn trích so với nguyên văn. Đánh giá độ phủ do model hỗ trợ, không bảo đảm kết luận đúng.
 - Kế hoạch Research tự chạy, chưa có bước chỉnh dàn ý; chưa có cập nhật báo cáo theo revision, cache nguồn xuyên run hoặc giao diện đánh dấu bằng chứng theo từng nhận định. Nguồn chỉ đọc HTML/text, chưa render JavaScript/paywall.
-- Tài liệu dài lấy phần văn bản đầu trong giới hạn và báo partial; chưa có truy hồi đoạn, embedding, số trang PDF, OCR/DOCX/XLSX/audio/video. Trích xuất tệp đang đồng bộ trong request upload.
-- Chế độ suy luận chọn model đã khai báo hỗ trợ; chưa gửi tham số thinking/effort riêng cho từng hãng. Chế độ Nhanh dùng luồng chat thông thường, chưa có mapping model riêng theo tác vụ. Metadata năng lực do chủ cấu hình khai báo.
+- Tài liệu dài lấy phần văn bản đầu trong giới hạn và báo partial; chưa có truy hồi đoạn, embedding, số trang PDF, OCR/DOCX/XLSX/audio/video. Trích xuất cần worker hàng đợi đang chạy; thiếu worker thì tệp đứng ở trạng thái đang đọc.
+- Chế độ Nhanh/Suy luận gửi tham số riêng từng hãng cho model đã khai báo hỗ trợ suy luận: Gemini 3 `thinkingLevel`, Gemini 2.5 `thinkingBudget`, Anthropic `thinking` (chỉ Suy luận, cần ngân sách > 2.048 token), OpenAI `reasoning_effort`. API OpenAI-compatible/DeepSeek/Cerebras/NVIDIA không nhận tham số này; chưa xác minh với key thật. Chế độ Nhanh dùng luồng chat thông thường, chưa có mapping model riêng theo tác vụ. Metadata năng lực do chủ cấu hình khai báo.
 - Project/model default có API; UI chưa có màn hình riêng cho mọi chính sách chọn model, lịch sử revision hoặc lưu trữ dự án. Bản địa hóa giao diện chính có Việt/Anh; một số thông báo backend vẫn tiếng Việt.
 - Chưa có dashboard health/chi phí theo tiền, giá model, ngân sách tiền toàn hệ thống, tổng quota dung lượng hoặc quản lý nhiều replica. Giới hạn khách theo workspace kết hợp throttle IP hiện tại cần được hiệu chỉnh trước khi mở công khai.
-- Tệp/hội thoại/dự án xóa mềm; chưa có giao diện khôi phục. Chat tạm thời không xuất hiện trong lịch sử và được scheduler dọn; không cam kết provider bên ngoài không lưu dữ liệu.
+- Tệp/hội thoại/dự án xóa mềm, xem/khôi phục/xóa vĩnh viễn trong Cài đặt → Đã xóa gần đây; giữ 30 ngày rồi scheduler xóa hẳn. Hội thoại đã tách khỏi dự án lúc xóa dự án không tự quay lại dự án khi khôi phục. Chat tạm thời không xuất hiện trong lịch sử và được scheduler dọn; không cam kết provider bên ngoài không lưu dữ liệu.
 - Chưa có Canvas, thư viện artifact, tạo ảnh, native search, Vertex qua service account/OAuth (mới có API key Express Mode) hoặc hệ agent tổng quát. Hệ agent riêng giữ cho phiên bản sau theo yêu cầu.

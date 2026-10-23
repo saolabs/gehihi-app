@@ -18,7 +18,7 @@ php artisan saola:assets
 php artisan serve --host=127.0.0.1 --port=8010 --no-reload
 ```
 
-Ở terminal thứ hai, chạy worker để xử lý câu trả lời và Research:
+Ở terminal thứ hai, chạy worker để xử lý câu trả lời, Research và đọc tệp upload:
 
 ```sh
 php artisan queue:work --tries=1 --timeout=300

@@ -38,6 +38,9 @@ class ModuleServiceProvider extends CoreModuleServiceProvider
             $m->post('/files', 'upload')->name('files.store')->middleware('throttle:12,1');
             $m->get('/files/{id}/download', 'download')->name('files.download');
             $m->delete('/files/{id}', 'deleteFile')->name('files.destroy');
+            $m->get('/trash', 'trash')->name('trash.index');
+            $m->post('/trash/{type}/{id}/restore', 'restore')->name('trash.restore')->where('type', 'conversations|projects|files');
+            $m->delete('/trash/{type}/{id}', 'forget')->name('trash.forget')->where('type', 'conversations|projects|files');
         });
     }
 }

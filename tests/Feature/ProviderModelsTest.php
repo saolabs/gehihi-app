@@ -102,4 +102,44 @@ class ProviderModelsTest extends TestCase
         Http::assertSent(fn ($r) => $r->url() === 'https://google.serper.dev/search' && $r->hasHeader('X-API-KEY', 'search-key'));
     }
 
+
+    /** Gửi một lượt qua gateway và trả body request thực gửi đi. */
+    private function sentBody(string $type, string $model, string $thinking, bool $reasoning = true, int $limit = 4096): array
+    {
+        $p = Provider::create(['name' => $type, 'type' => $type, 'kind' => 'llm', 'base_url' => '', 'secrets' => ['k'], 'models' => [$model], 'default_model' => $model, 'capabilities' => ['models' => [$model => ['vision' => false, 'reasoning' => $reasoning]]]]);
+        $body = null;
+        Http::fake(function ($request) use (&$body) {
+            $body = $request->data();
+
+            return Http::response('', 200, ['Content-Type' => 'text/event-stream']);
+        });
+        try {
+            app(TextGateway::class)->generate($p, $model, [['role' => 'system', 'content' => 'S'], ['role' => 'user', 'content' => 'Hi']], $limit, fn () => null, fn () => null, false, $thinking);
+        } catch (\Throwable) {
+            // Stream rỗng nên gateway báo chưa xong; chỉ cần body đã gửi.
+        }
+        $p->forceDelete();
+
+        return $body;
+    }
+
+    public function test_thinking_mode_maps_to_each_provider_native_parameter(): void
+    {
+        $this->assertSame(['thinkingLevel' => 'high'], $this->sentBody('google', 'gemini-3-pro', 'reasoning')['generationConfig']['thinkingConfig']);
+        $this->assertSame(['thinkingBudget' => 2048], $this->sentBody('google_vertex', 'gemini-2.5-flash', 'reasoning')['generationConfig']['thinkingConfig']);
+        $this->assertSame(['thinkingBudget' => 0], $this->sentBody('google', 'gemini-2.5-flash', 'fast')['generationConfig']['thinkingConfig']);
+        $this->assertSame(['thinkingBudget' => 128], $this->sentBody('google', 'gemini-2.5-pro', 'fast')['generationConfig']['thinkingConfig']);
+        $this->assertSame(['type' => 'enabled', 'budget_tokens' => 2048], $this->sentBody('anthropic', 'claude-x', 'reasoning')['thinking']);
+        $this->assertArrayNotHasKey('thinking', $this->sentBody('anthropic', 'claude-x', 'fast'));
+        $this->assertSame('high', $this->sentBody('openai', 'o-model', 'reasoning')['reasoning_effort']);
+        $this->assertSame('low', $this->sentBody('openai', 'o-model', 'fast')['reasoning_effort']);
+    }
+
+    public function test_thinking_parameters_are_not_sent_to_undeclared_or_compatible_models(): void
+    {
+        $this->assertArrayNotHasKey('thinkingConfig', $this->sentBody('google', 'gemini-2.5-flash', 'reasoning', false)['generationConfig']);
+        $this->assertArrayNotHasKey('reasoning_effort', $this->sentBody('openai', 'gpt-x', 'fast', false));
+        $this->assertArrayNotHasKey('thinkingConfig', $this->sentBody('google', 'gemini-2.5-flash', 'auto')['generationConfig']);
+        $this->assertArrayNotHasKey('thinking', $this->sentBody('anthropic', 'claude-x', 'reasoning', true, 1024));
+    }
 }

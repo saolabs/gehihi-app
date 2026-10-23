@@ -117,6 +117,11 @@ class WorkspaceRepository implements WorkspaceRepositoryInterface
         return SourceFile::where('workspace_id', $ws)->findOrFail($id);
     }
 
+    public function findFile(string $id): ?SourceFile
+    {
+        return SourceFile::find($id);
+    }
+
     public function createFile(string $ws, array $data): SourceFile
     {
         return SourceFile::create(['workspace_id' => $ws, ...$data]);
@@ -132,8 +137,67 @@ class WorkspaceRepository implements WorkspaceRepositoryInterface
         $this->file($ws, $id)->delete();
     }
 
+    /** Mục đã xoá mềm của workspace, mới nhất trước. Chat tạm không vào thùng rác. */
+    public function trash(string $ws): array
+    {
+        return [
+            'conversations' => Conversation::onlyTrashed()->where('workspace_id', $ws)->where('temporary', false)->latest('deleted_at')->limit(100)->get(['id', 'title', 'project_id', 'deleted_at'])->toArray(),
+            'projects' => Project::onlyTrashed()->where('workspace_id', $ws)->latest('deleted_at')->limit(100)->get(['id', 'name', 'deleted_at'])->toArray(),
+            'files' => SourceFile::onlyTrashed()->where('workspace_id', $ws)->latest('deleted_at')->limit(100)->get(['id', 'name', 'size', 'project_id', 'deleted_at'])->toArray(),
+        ];
+    }
+
+    private function trashed(string $ws, string $type, string $id): Conversation|Project|SourceFile
+    {
+        $model = ['conversations' => Conversation::class, 'projects' => Project::class, 'files' => SourceFile::class][$type];
+
+        return $model::onlyTrashed()->where('workspace_id', $ws)->findOrFail($id);
+    }
+
+    public function restore(string $ws, string $type, string $id): void
+    {
+        DB::transaction(function () use ($ws, $type, $id) {
+            $item = $this->trashed($ws, $type, $id);
+            $deletedAt = $item->deleted_at;
+            $item->restore();
+            if ($item instanceof Project) {
+                // Tệp xoá kèm dự án (cùng lúc) quay lại cùng dự án; hội thoại đã được tách ra ngoài lúc xoá.
+                SourceFile::onlyTrashed()->where('project_id', $item->id)->where('deleted_at', '>=', $deletedAt->copy()->subSecond())->restore();
+            } elseif ($item->project_id && ! Project::where('id', $item->project_id)->exists()) {
+                $item->update(['project_id' => null]); // dự án vẫn trong thùng rác: đưa ra ngoài thay vì để mồ côi
+            }
+        });
+    }
+
+    /** Xoá vĩnh viễn; trả đường dẫn tệp trên đĩa cần gỡ. */
+    public function forget(string $ws, string $type, string $id): array
+    {
+        return DB::transaction(function () use ($ws, $type, $id) {
+            $item = $this->trashed($ws, $type, $id);
+            $files = match (true) {
+                $item instanceof SourceFile => collect([$item]),
+                $item instanceof Project => SourceFile::onlyTrashed()->where('project_id', $item->id)->get(),
+                default => collect(),
+            };
+            $paths = $files->pluck('path')->all();
+            $files->each->forceDelete();
+            if (! $item instanceof SourceFile) {
+                $item->forceDelete();
+            }
+
+            return $paths;
+        });
+    }
+
     public function purgeExpired(): array
     {
+        $cutoff = now()->subDays(30);
+        $oldFiles = SourceFile::onlyTrashed()->where('deleted_at', '<', $cutoff)->get();
+        $trashPaths = $oldFiles->pluck('path')->all();
+        $oldFiles->each->forceDelete();
+        Conversation::onlyTrashed()->where('deleted_at', '<', $cutoff)->get()->each->forceDelete();
+        Project::onlyTrashed()->where('deleted_at', '<', $cutoff)->get()->each->forceDelete();
+
         $ids = Workspace::whereNull('user_id')->where('expires_at', '<', now())->pluck('id');
         $paths = SourceFile::withTrashed()->whereIn('workspace_id', $ids)->pluck('path')->all();
         Workspace::whereIn('id', $ids)->delete();
@@ -142,6 +206,6 @@ class WorkspaceRepository implements WorkspaceRepositoryInterface
             $c->forceDelete();
         }
 
-        return $paths;
+        return [...$trashPaths, ...$paths];
     }
 }

@@ -70,6 +70,16 @@ return $this->repo->createConversation($ws, $data)->toArray();
         return $this->repo->updateConversation($ws, $id, $data)->toArray();
     }
 
+    public function trash(string $ws): array
+    {
+        return $this->repo->trash($ws);
+    }
+
+    public function restore(string $ws, string $type, string $id): void
+    {
+        $this->repo->restore($ws, $type, $id);
+    }
+
     public function deleteConversation(string $ws, string $id): void
     {
         $this->repo->deleteConversation($ws, $id);

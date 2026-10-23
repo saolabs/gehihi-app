@@ -41,11 +41,19 @@ interface WorkspaceRepositoryInterface
 
     public function file(string $ws, string $id): SourceFile;
 
+    public function findFile(string $id): ?SourceFile;
+
     public function createFile(string $ws, array $data): SourceFile;
 
     public function updateFile(string $id, array $data): void;
 
     public function deleteFile(string $ws, string $id): void;
+
+    public function trash(string $ws): array;
+
+    public function restore(string $ws, string $type, string $id): void;
+
+    public function forget(string $ws, string $type, string $id): array;
 
     public function purgeExpired(): array;
 }

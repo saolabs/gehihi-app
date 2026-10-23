@@ -55,7 +55,7 @@ class Executor
                     if ($delta) {
                         $delta($piece);
                     }
-                }, fn () => $this->guard($id));
+                }, fn () => $this->guard($id), false, $s['options']['thinking'] ?? 'auto');
                 $this->runs->completeOperation($id, $key, $out, $out['tokens'], $out['metering']);
                 $this->guard($id);
                 $this->runs->beginOperation($id, $operation, 'llm_result', 0);

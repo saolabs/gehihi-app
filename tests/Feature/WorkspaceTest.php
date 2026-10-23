@@ -10,6 +10,9 @@ use App\Modules\AiRuntime\Repositories\RunRepository;
 use App\Modules\AiRuntime\Services\Executor;
 use App\Modules\AiRuntime\Services\RunStopped;
 use App\Modules\Identity\Models\User;
+use App\Modules\Workspace\Jobs\ExtractFile;
+use App\Modules\Workspace\Models\SourceFile;
+use App\Modules\Workspace\Services\FileService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -32,6 +35,16 @@ class WorkspaceTest extends TestCase
     private function provider(?string $user = null, string $type = 'openai_compatible', array $keys = []): Provider
     {
         return Provider::create(['name' => 'Test provider', 'user_id' => $user, 'kind' => 'llm', 'type' => $type, 'base_url' => 'https://api.example.test/v1', 'secrets' => $keys, 'models' => ['test-model'], 'default_model' => 'test-model', 'enabled' => true, 'is_default' => true]);
+    }
+
+    /** Upload rồi chạy ExtractFile ngay (queue đang fake), trả về id sau khi khẳng định trạng thái cuối. */
+    private function upload(UploadedFile $file, string $status): string
+    {
+        $data = $this->postJson('/api/files', ['file' => $file])->assertCreated()->assertJsonPath('data.status', 'processing')->assertJsonMissingPath('data.path')->json('data');
+        app(FileService::class)->extract($data['id']);
+        $this->assertSame($status, SourceFile::find($data['id'])->status);
+
+        return $data['id'];
     }
 
     private function conversation(?string $project = null): string
@@ -223,7 +236,7 @@ class WorkspaceTest extends TestCase
         $p->update(['capabilities' => ['models' => ['test-model' => ['vision' => true]]]]);
         Http::fake(['api.example.test/*' => fn () => $this->response('Image received')]);
         $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1cAAAAASUVORK5CYII=');
-        $file = $this->postJson('/api/files', ['file' => UploadedFile::fake()->createWithContent('pixel.png', $png)])->assertCreated()->assertJsonPath('data.status', 'ready')->json('data.id');
+        $file = $this->upload(UploadedFile::fake()->createWithContent('pixel.png', $png), 'ready');
         $run = $this->start($this->conversation(), ['file_ids' => [$file]]);
         app(Executor::class)->execute($run['id']);
         $this->getJson('/api/runs/'.$run['id'])->assertJsonPath('data.status', 'completed')->assertJsonPath('data.content', 'Image received');
@@ -254,8 +267,21 @@ class WorkspaceTest extends TestCase
 
     public function test_upload_does_not_claim_binary_files_were_read(): void
     {
-        $this->postJson('/api/files', ['file' => UploadedFile::fake()->createWithContent('data.txt', "\0binary")])->assertCreated()->assertJsonPath('data.status', 'error')->assertJsonMissingPath('data.path');
-        $this->postJson('/api/files', ['file' => UploadedFile::fake()->createWithContent('notes.md', '# Notes')])->assertCreated()->assertJsonPath('data.status', 'ready');
+        $this->upload(UploadedFile::fake()->createWithContent('data.txt', "\0binary"), 'error');
+        $this->upload(UploadedFile::fake()->createWithContent('notes.md', '# Notes'), 'ready');
+    }
+
+    public function test_upload_returns_before_extraction_and_unread_files_cannot_be_sent(): void
+    {
+        $this->provider();
+        $long = str_repeat('tên-rất-dài-', 30).'.md';
+        $file = $this->postJson('/api/files', ['file' => UploadedFile::fake()->createWithContent($long, '# Notes')])->assertCreated()->assertJsonPath('data.status', 'processing')->json('data');
+        Queue::assertPushed(ExtractFile::class, fn ($job) => $job->fileId === $file['id']);
+        $this->assertStringEndsWith('.md', $file['name']);
+        $this->assertLessThanOrEqual(180, mb_strlen($file['name']));
+        $this->postJson('/api/conversations/'.$this->conversation().'/runs', ['request_id' => (string) Str::uuid(), 'message' => 'Đọc tệp', 'mode' => 'chat', 'file_ids' => [$file['id']]])->assertUnprocessable();
+        app(FileService::class)->extract($file['id']);
+        $this->assertSame('ready', SourceFile::find($file['id'])->status);
     }
 
     public function test_quota_is_enforced_before_dispatch_or_message_creation(): void
