@@ -3,6 +3,8 @@
 namespace App\Modules\AiRuntime;
 
 use App\Modules\AiRuntime\Http\Controllers\Admin\LimitController as AdminLimitController;
+use App\Modules\AiRuntime\Http\Controllers\Admin\ModelFlowController as AdminModelFlowController;
+use App\Modules\AiRuntime\Http\Controllers\Api\ModelFlowController as ApiModelFlowController;
 use App\Modules\AiRuntime\Http\Controllers\Api\RunController as ApiRunController;
 use App\Modules\AiRuntime\Repositories\RunRepository;
 use App\Modules\AiRuntime\Repositories\RunRepositoryInterface;
@@ -25,6 +27,17 @@ class ModuleServiceProvider extends CoreModuleServiceProvider
 
     public function routes(): void
     {
+        System::context('admin')->module(['slug' => 'model-flows', 'prefix' => 'model-flows'])->controller(AdminModelFlowController::class)->as('model-flows')
+            ->title('Luồng model')->displayName('Luồng model')->group(function ($m) {
+                $m->get('/', 'index')->name('index');
+                $m->put('/', 'update')->name('update');
+            });
+
+        System::context('api')->module(['slug' => 'model-flows', 'prefix' => 'model-flows'])->controller(ApiModelFlowController::class)->as('model-flows')->group(function ($m) {
+            $m->get('/', 'index')->name('index');
+            $m->put('/', 'update')->name('update')->middleware('throttle:30,1');
+        });
+
         System::context('admin')->module(['slug' => 'limits', 'prefix' => 'limits'])->controller(AdminLimitController::class)->as('limits')
             ->title('Hạn mức')->displayName('Hạn mức')->group(function ($m) {
                 $m->get('/', 'index')->name('index');

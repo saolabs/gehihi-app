@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 class RunService
 {
-    public function __construct(private WorkspaceRepositoryInterface $workspace, private RunRepositoryInterface $runs, private ContextBuilder $context, private ProviderService $providers) {}
+    public function __construct(private WorkspaceRepositoryInterface $workspace, private RunRepositoryInterface $runs, private ContextBuilder $context, private ProviderService $providers, private ModelFlows $flows) {}
 
     public function start(string $ws, string $conversation, ?string $userId, array $data): array
     {
@@ -49,6 +49,9 @@ class RunService
             $snapshot = $this->context->snapshot($ws, $conversation, $parent, $fileIds, $userId, $data);
             $candidates = $this->providers->resolve($snapshot['selection'], $userId, $snapshot['vision'], $data['thinking'] ?? 'auto');
             $snapshot['candidates'] = $candidates;
+            if (($data['mode'] ?? 'chat') !== 'chat') {
+                $snapshot['stage_candidates'] = $this->flows->snapshot($ws, $userId, $candidates, $data['thinking'] ?? 'auto');
+            }
             $message = $this->workspace->addMessage($conversation, ['role' => 'assistant', 'parent_id' => $parent, 'content' => '', 'status' => 'queued']);
             $this->workspace->updateConversation($ws, $conversation, ['selected_leaf_id' => $message->id, 'title' => $c->title === 'Cuộc trò chuyện mới' ? mb_substr($user->content, 0, 65) : $c->title]);
 

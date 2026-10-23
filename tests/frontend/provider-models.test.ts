@@ -6,6 +6,24 @@ const clients: GehihiClient[] = [];
 afterEach(() => { clients.splice(0).forEach(c => c.destroy()); vi.restoreAllMocks(); });
 
 describe('provider model editor', () => {
+    it('separates AI choices from grouped search accounts in personal settings', () => {
+        const c = new GehihiClient(() => {}); clients.push(c);
+        const providers = [
+            { id: 'ai', kind: 'llm', type: 'google', models: ['gemini'], key_count: 1 },
+            { id: 'a', kind: 'search', type: 'tavily', models: [], key_count: 2, scope: 'user' },
+            { id: 'b', kind: 'search', type: 'tavily', models: [], key_count: 1, scope: 'user' },
+        ];
+        c.patch({ providers, catalog: providers, providerTypes: { google: { label: 'Google Gemini', kind: 'llm' }, tavily: { label: 'Tavily', kind: 'search' } } });
+        expect(c.state.aiProviders.map((p: any) => p.id)).toEqual(['ai']);
+        expect(c.state.searchServiceGroups).toMatchObject([{ type: 'tavily', key_count: 3, accounts: [{ id: 'a' }, { id: 'b' }] }]);
+        expect(c.state.typeOptions.map((p: any) => p.value)).toEqual(['google']);
+        expect(c.state.searchOptions).toHaveLength(1);
+        c.editProvider(undefined, 'tavily');
+        expect(c.state.editProvider.type).toBe('tavily');
+        expect(c.state.providerKind).toBe('search');
+        expect(c.state.typeOptions.map((p: any) => p.value)).toEqual(['tavily']);
+    });
+
     it('omits preset URL overrides and leaves custom URLs empty when switching types', () => {
         const c = new GehihiClient(() => {}); clients.push(c);
         c.patch({ providerTypes: { google: { kind: 'llm' }, openai_compatible: { kind: 'llm', base_url_editable: true } } });
@@ -32,9 +50,15 @@ describe('provider model editor', () => {
         const c = new GehihiClient(() => {}); clients.push(c);
         c.editProvider({ id: 'p1', name: 'Saved', type: 'google_vertex', models: ['old'], default_model: 'old', capabilities: {}, key_count: 1 });
         document.body.innerHTML = '<form><input name="name" value="Edited"><input name="type" value="google_vertex"><input name="models" value="old"><input name="default_model" value="old"><input name="api_keys" value=""><button type="button">Load</button></form>';
-        vi.spyOn(c, 'api').mockResolvedValue(['new']);
+        vi.spyOn(c, 'api').mockResolvedValue(['new', 'last']);
         await c.probe({ currentTarget: document.querySelector('button') } as any, 'discover');
         expect(c.state.editProvider).toMatchObject({ name: 'Edited', models: 'old', default_model: 'old', key_count: 1 });
-        expect(c.state.providerModelChoices).toMatchObject([{ id: 'old', selected: true, stale: true }, { id: 'new', selected: false }]);
+        expect(c.state.providerModelChoices).toMatchObject([{ id: 'new', selected: false }, { id: 'last', selected: false }, { id: 'old', selected: true, stale: true }]);
+        const order = c.state.providerModelChoices.map((model: any) => model.id);
+        c.patch({ editProvider: toggleModel(c.state.editProvider, 'models', 'last', true) });
+        expect(c.state.providerModelChoices.map((model: any) => model.id)).toEqual(order);
+        expect(c.state.providerModelChoices[1].selected).toBe(true);
+        c.patch({ editProvider: toggleModel(c.state.editProvider, 'models', 'last', false) });
+        expect(c.state.providerModelChoices.map((model: any) => model.id)).toEqual(order);
     });
 });

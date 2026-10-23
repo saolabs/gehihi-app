@@ -3,6 +3,7 @@
 namespace App\Modules\AiProviders;
 
 use App\Modules\AiProviders\Http\Controllers\Admin\ProviderController as AdminProviderController;
+use App\Modules\AiProviders\Http\Controllers\Admin\SearchServiceController;
 use App\Modules\AiProviders\Http\Controllers\Api\ProviderController as ApiProviderController;
 use App\Modules\AiProviders\Repositories\ProviderRepository;
 use App\Modules\AiProviders\Repositories\ProviderRepositoryInterface;
@@ -18,6 +19,16 @@ class ModuleServiceProvider extends CoreModuleServiceProvider
 
     public function routes(): void
     {
+        System::context('admin')->module(['slug' => 'search-services', 'prefix' => 'search-services'])->controller(SearchServiceController::class)->as('search-services')
+            ->title('Dịch vụ tìm kiếm')->displayName('Dịch vụ tìm kiếm')->group(function ($m) {
+                $m->get('/', 'index')->name('index');
+                $m->get('/{id}', 'edit')->name('edit');
+                $m->post('/', 'store')->name('store');
+                $m->post('/test', 'test')->name('test');
+                $m->put('/{id}', 'update')->name('update');
+                $m->delete('/{id}', 'destroy')->name('destroy');
+            });
+
         System::context('admin')->module(['slug' => 'providers', 'prefix' => 'providers'])->controller(AdminProviderController::class)->as('providers')
             ->title('Provider')->displayName('Provider')->group(function ($m) {
                 $m->get('/', 'index')->name('index');

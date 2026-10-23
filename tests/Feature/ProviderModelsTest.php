@@ -119,12 +119,23 @@ class ProviderModelsTest extends TestCase
         $this->assertSame('OK', $out['text']); // key sai bị bỏ qua, chuyển sang key kế
     }
 
-    public function test_vertex_express_key_on_gemini_api_type_points_to_vertex(): void
+    public function test_gemini_authorization_key_is_forwarded_for_discovery_and_probe_and_saved_encrypted(): void
     {
         $this->actingAs($this->user(true));
-        $this->postJson('/admin/providers', ['name' => 'G', 'type' => 'google', 'api_keys' => "AQ.vertex-express-key", 'models' => 'gemini-3.5-flash'])
-            ->assertUnprocessable()->assertJsonPath('errors.api_keys.0', fn ($m) => str_contains($m, 'Google Cloud (Vertex AI)'));
-        Http::assertNothingSent();
+        $form = ['name' => 'Gemini', 'type' => 'google', 'api_keys' => 'AQ.gemini-auth-key', 'models' => 'gemini-3.5-flash', 'default_model' => 'gemini-3.5-flash'];
+        Http::fake(['generativelanguage.googleapis.com/*' => fn ($r) => $r->method() === 'GET'
+            ? Http::response(['models' => [['name' => 'models/gemini-3.5-flash', 'supportedGenerationMethods' => ['generateContent']]]])
+            : Http::response('data: '.json_encode(['candidates' => [['content' => ['parts' => [['text' => 'OK']]], 'finishReason' => 'STOP']]])."\n\n", 200, ['Content-Type' => 'text/event-stream'])]);
+        foreach (['/admin/providers', '/api/providers'] as $path) {
+            $this->postJson($path.'/discover', $form)->assertOk()->assertSee('gemini-3.5-flash');
+            $this->postJson($path.'/test', $form)->assertOk()->assertJsonPath('data.results.0.ok', true);
+        }
+        Http::assertSentCount(4);
+        Http::assertSent(fn ($r) => $r->hasHeader('x-goog-api-key', 'AQ.gemini-auth-key') && str_contains($r->url(), '/models/gemini-3.5-flash:streamGenerateContent'));
+        $this->postJson('/admin/providers', $form)->assertCreated()->assertDontSee('AQ.gemini-auth-key');
+        $p = Provider::firstOrFail();
+        $this->assertSame(['AQ.gemini-auth-key'], $p->secrets);
+        $this->assertStringNotContainsString('AQ.gemini-auth-key', $p->getRawOriginal('secrets'));
     }
 
     public function test_admin_form_renders_saved_models_without_client_only_helpers(): void
@@ -134,6 +145,38 @@ class ProviderModelsTest extends TestCase
         $p = Provider::firstOrFail();
         $this->withHeaders(['Accept' => 'text/html'])->get('/admin/providers/'.$p->id)->assertOk()->assertSee('gemini-vision')->assertSee('model-picker-grid', false)->assertDontSee('name="base_url"', false);
         $this->get('/admin/providers/create')->assertOk()->assertSee('Google Cloud (Vertex AI)');
+    }
+
+    public function test_key_checks_can_be_split_into_single_key_requests(): void
+    {
+        $this->actingAs($this->user(true));
+        Http::fake(['generativelanguage.googleapis.com/*' => fn () => Http::response('data: '.json_encode(['candidates' => [['content' => ['parts' => [['text' => 'OK']]], 'finishReason' => 'STOP']]])."\n\n", 200, ['Content-Type' => 'text/event-stream'])]);
+        $form = ['name' => 'Gemini', 'type' => 'google', 'api_keys' => "AQ.first\nAQ.second", 'models' => 'gemini-3.5-flash', 'key_index' => 2];
+        foreach (['/admin/providers/test', '/api/providers/test'] as $path) {
+            $this->postJson($path, $form)->assertOk()->assertJsonPath('data.results.0.key', 2)->assertJsonPath('data.results.0.ok', true)->assertJsonCount(1, 'data.results');
+            $this->postJson($path, [...$form, 'key_index' => 0])->assertUnprocessable();
+            $this->postJson($path, [...$form, 'key_index' => 3])->assertUnprocessable();
+        }
+        Http::assertSentCount(2);
+        Http::assertNotSent(fn ($r) => $r->hasHeader('x-goog-api-key', 'AQ.first'));
+        Http::assertSent(fn ($r) => $r->hasHeader('x-goog-api-key', 'AQ.second'));
+    }
+
+    public function test_catalog_skips_rejected_keys_then_paginates_with_the_working_key(): void
+    {
+        $this->actingAs($this->user(true));
+        Http::fake(['generativelanguage.googleapis.com/*' => function ($r) {
+            if (!$r->hasHeader('x-goog-api-key', 'AQ.good')) {
+                return Http::response(['error' => ['status' => 'INVALID_ARGUMENT', 'details' => [['reason' => 'API_KEY_INVALID']]]], 400);
+            }
+            return str_contains($r->url(), 'pageToken=next')
+                ? Http::response(['models' => [['name' => 'models/gemini-3.5-flash-lite', 'supportedGenerationMethods' => ['generateContent']]]])
+                : Http::response(['models' => [['name' => 'models/gemini-3.5-flash', 'supportedGenerationMethods' => ['generateContent']]], 'nextPageToken' => 'next']);
+        }]);
+        $this->postJson('/admin/providers/discover', ['name' => 'Gemini', 'type' => 'google', 'api_keys' => "AQ.bad1\nAQ.bad2\nAQ.good", 'models' => ''])
+            ->assertOk()->assertJsonPath('data.models', ['gemini-3.5-flash', 'gemini-3.5-flash-lite']);
+        Http::assertSentCount(4);
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'pageToken=next') && !$r->hasHeader('x-goog-api-key', 'AQ.good'));
     }
 
     public function test_preset_providers_ignore_submitted_urls_and_custom_providers_require_them(): void

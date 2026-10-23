@@ -34,7 +34,9 @@ class Executor
         $reserve = (int) ceil(strlen(json_encode($textOnly, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) / 2) + $limit + 4096 * $imageCount;
         $emitted = false;
         $last = null;
-        foreach ($s['candidates'] as $i => $candidate) {
+        $stage = ModelFlows::stage($operation);
+        $candidates = $s['stage_candidates'][$stage ?? ''] ?? $s['candidates'];
+        foreach ($candidates as $i => $candidate) {
             $key = $operation.':epoch:'.($r->checkpoint['epoch'] ?? 0).':attempt:'.$i;
             $cached = $this->runs->operation($id, $key);
             if ($cached && isset($cached['error'])) {

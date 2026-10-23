@@ -104,7 +104,10 @@ class WorkspaceRepository implements WorkspaceRepositoryInterface
 
     public function preferences(string $ws, array $data): void
     {
-        Workspace::findOrFail($ws)->update(['preferences' => $data]);
+        DB::transaction(function () use ($ws, $data) {
+            $workspace = Workspace::lockForUpdate()->findOrFail($ws);
+            $workspace->update(['preferences' => array_replace($workspace->preferences ?? [], $data)]);
+        });
     }
 
     public function files(string $ws): array

@@ -7,8 +7,8 @@
         @section('meta:title', 'Provider · Quản trị Gehihi')
         @block('content')
             <header class="adm-page-head">
-                <div><h1>Provider hệ thống</h1><p class="muted">Phục vụ khách và tài khoản chưa có provider riêng. Thống kê 7 ngày gần nhất.</p></div>
-                <a class="small-button primary" href="/admin/providers/create"><svg class="i" aria-hidden="true"><use href="#i-plus"></use></svg>Thêm provider</a>
+                <div><h1>Provider AI</h1><p class="muted">Cấu hình mô hình AI dùng chung. Dịch vụ tìm kiếm được quản lý ở trang riêng.</p></div>
+                <a class="small-button primary" href="/admin/providers/create"><svg class="i" aria-hidden="true"><use href="#i-plus"></use></svg>Thêm provider AI</a>
             </header>
             @if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
             <section class="adm-card">

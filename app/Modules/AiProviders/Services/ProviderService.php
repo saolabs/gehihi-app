@@ -12,9 +12,9 @@ class ProviderService
     public function __construct(private ProviderRepositoryInterface $repo, private OutboundHttp $http) {}
 
     /** Luật kiểm tra form provider, dùng chung cho cài đặt cá nhân và trang quản trị. */
-    public static function rules(): array
+    public static function rules(?string $kind = null): array
     {
-        return ['name' => ['required', 'string', 'max:100'], 'type' => ['required', Rule::in(array_keys(ProviderCatalog::TYPES))], 'base_url' => ['exclude_unless:type,openai_compatible,searxng', 'required', 'string', 'max:400'], 'api_keys' => ['nullable', 'string', 'max:16000'], 'clear_keys' => ['sometimes', 'boolean'], 'models' => ['nullable', 'string', 'max:20000'], 'default_model' => ['nullable', 'string', 'max:200'], 'enabled' => ['sometimes', 'boolean'], 'is_default' => ['sometimes', 'boolean'], 'vision_models' => ['nullable', 'string', 'max:20000'], 'reasoning_models' => ['nullable', 'string', 'max:20000'], 'vision' => ['sometimes', 'boolean'], 'reasoning' => ['sometimes', 'boolean']];
+        return ['name' => ['required', 'string', 'max:100'], 'type' => ['required', Rule::in(array_keys(ProviderCatalog::types($kind)))], 'base_url' => ['exclude_unless:type,openai_compatible,searxng', 'required', 'string', 'max:400'], 'api_keys' => ['nullable', 'string', 'max:16000'], 'clear_keys' => ['sometimes', 'boolean'], 'models' => ['nullable', 'string', 'max:20000'], 'default_model' => ['nullable', 'string', 'max:200'], 'enabled' => ['sometimes', 'boolean'], 'is_default' => ['sometimes', 'boolean'], 'vision_models' => ['nullable', 'string', 'max:20000'], 'reasoning_models' => ['nullable', 'string', 'max:20000'], 'vision' => ['sometimes', 'boolean'], 'reasoning' => ['sometimes', 'boolean']];
     }
 
     /** Dữ liệu điền sẵn cho form sửa: danh sách model dạng một-dòng-một-ID, không bao giờ kèm key. */
@@ -38,7 +38,7 @@ class ProviderService
 
     public function public(Provider $p): array
     {
-        return [...$p->toArray(), 'base_url' => ProviderCatalog::editableBaseUrl($p->type) ? $p->base_url : '', 'scope' => $p->user_id ? 'user' : 'system', 'key_count' => count($p->secrets ?? [])];
+        return [...$p->toArray(), 'type_label' => ProviderCatalog::TYPES[$p->type]['label'], 'base_url' => ProviderCatalog::editableBaseUrl($p->type) ? $p->base_url : '', 'scope' => $p->user_id ? 'user' : 'system', 'key_count' => count($p->secrets ?? [])];
     }
 
     public function draft(?string $id, ?string $owner, array $data): Provider
@@ -56,10 +56,8 @@ class ProviderService
         if (! $keys && ! ($data['clear_keys'] ?? false) && $old?->type === $type) {
             $keys = $old->secrets ?? [];
         }
-        // Key Vertex AI Express Mode có dạng AQ.…; Gemini API (AI Studio, AIza…) từ chối nó bằng API_KEY_INVALID.
-        if ($type === 'google' && array_filter($keys, fn ($k) => str_starts_with($k, 'AQ.'))) {
-            throw ValidationException::withMessages(['api_keys' => 'Key dạng AQ.… là key Vertex AI (Express Mode). Hãy chọn nhà cung cấp "Google Cloud (Vertex AI)"; "Google Gemini" chỉ nhận key AI Studio (AIza…).']);
-        }
+        // Gemini API and Vertex both support service-account-bound authorization
+        // keys. A prefix cannot identify the allowed API; let Google validate it.
         if (! $keys && ! in_array($type, ['openai_compatible', 'searxng'])) {
             throw ValidationException::withMessages(['api_keys' => 'Provider cần ít nhất một API key.']);
         }
@@ -193,7 +191,8 @@ return $out;
         if ($p->type === 'google_vertex') {
             return ProviderCatalog::VERTEX_MODELS;
         }
-        $headers = $this->headers($p, ($p->secrets ?? [])[0] ?? null);
+        $keys = ($p->secrets ?? []) ?: [null];
+        $keyIndex = 0;
         $base = ProviderCatalog::baseUrl($p->type, $p->base_url).'/models';
         $ids = [];
         $cursor = null;
@@ -203,13 +202,21 @@ return $out;
             if ($cursor) {
                 $query[$google ? 'pageToken' : 'after_id'] = $cursor;
             }
-            $r = $this->http->send('GET', $base.($query ? '?'.http_build_query($query) : ''), $headers);
-            if (! $r->successful()) {
-                if (ProviderFailure::status($r) === 401) {
+            do {
+                $r = $this->http->send('GET', $base.($query ? '?'.http_build_query($query) : ''), $this->headers($p, $keys[$keyIndex]));
+                if ($r->successful()) break;
+                $status = ProviderFailure::status($r);
+                // Select a working key before pagination; page tokens belong to
+                // that key's catalog and must not move between projects.
+                if ($page === 0 && in_array($status, [401, 403, 429], true) && $keyIndex + 1 < count($keys)) {
+                    $keyIndex++;
+                    continue;
+                }
+                if ($status === 401) {
                     throw new ProviderFailure('Provider từ chối API key này. Kiểm tra lại key (Gemini: tạo ở Google AI Studio).', 401);
                 }
                 throw new ProviderFailure('Không tải được danh sách model: HTTP '.$r->status(), $r->status());
-            }
+            } while (true);
             $payload = $this->http->json($r);
             foreach (($payload['data'] ?? $payload['models'] ?? $payload['publisherModels'] ?? []) as $row) {
                 if ($p->type === 'google' && ! in_array('generateContent', $row['supportedGenerationMethods'] ?? [], true)) {

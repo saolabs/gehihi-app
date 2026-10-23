@@ -25,6 +25,11 @@ class ProviderCatalog
         'exa' => ['label' => 'Exa', 'kind' => 'search', 'base' => 'https://api.exa.ai'],
     ];
 
+    public static function types(?string $kind = null): array
+    {
+        return $kind ? array_filter(self::TYPES, fn ($type) => $type['kind'] === $kind) : self::TYPES;
+    }
+
     public static function editableBaseUrl(string $type): bool
     {
         return self::TYPES[$type]['base_url_editable'] ?? false;

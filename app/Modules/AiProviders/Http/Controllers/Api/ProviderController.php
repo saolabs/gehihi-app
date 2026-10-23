@@ -55,6 +55,7 @@ return $r->user()->id;
 
     public function test(Request $r)
     {
-        return $this->ok(['results' => $this->probe->test($this->service->draft($r->input('id'), $this->owner($r), $this->data($r)))]);
+        $data = $r->validate([...ProviderService::rules(), 'key_index' => ['sometimes', 'integer', 'min:1', 'max:20']]);
+        return $this->ok(['results' => $this->probe->test($this->service->draft($r->input('id'), $this->owner($r), $data), $data['key_index'] ?? null)]);
     }
 }

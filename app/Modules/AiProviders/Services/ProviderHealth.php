@@ -12,12 +12,12 @@ class ProviderHealth
 {
     public function __construct(private ProviderRepositoryInterface $providers) {}
 
-    public function providers(): array
+    public function providers(?string $kind = null): array
     {
         $runs = GenerationRun::where('created_at', '>=', now()->subDays(6)->startOfDay())->get(['status', 'actual_model'])->filter(fn ($r) => $r->actual_model)->groupBy(fn ($r) => $r->actual_model['provider_id']);
 
         return [
-            'rows' => Provider::whereNull('user_id')->orderBy('kind')->orderBy('name')->get()->map(function (Provider $p) use ($runs) {
+            'rows' => Provider::whereNull('user_id')->when($kind, fn ($q) => $q->where('kind', $kind))->orderBy('kind')->orderBy('name')->get()->map(function (Provider $p) use ($runs) {
                 $keys = count($p->secrets ?? []);
                 $cooling = $this->providers->coolingKeys($p);
                 $used = $runs[$p->id] ?? collect();
@@ -25,14 +25,15 @@ class ProviderHealth
                 $status = ! $p->enabled ? 'off' : ($keys && $cooling >= $keys ? 'down' : ($cooling || ($used->count() && $failed / $used->count() > .2) ? 'warn' : 'ok'));
 
                 return ['id' => $p->id, 'name' => $p->name, 'kind' => $p->kind, 'kind_label' => $p->kind === 'search' ? 'Tìm kiếm' : 'Mô hình AI',
+                    'type' => $p->type, 'enabled' => $p->enabled, 'key_count' => $keys,
                     'type_label' => ProviderCatalog::TYPES[$p->type]['label'] ?? $p->type, 'is_default' => $p->is_default,
                     'status' => $status, 'status_label' => ['off' => 'Đã tắt', 'down' => 'Mọi key đang tạm khóa', 'warn' => 'Cần chú ý', 'ok' => 'Hoạt động'][$status],
                     'keys' => $cooling ? "$keys ($cooling tạm khóa)" : (string) $keys, 'models' => $p->kind === 'search' ? '—' : (string) count($p->models ?? []),
                     'runs' => Format::num($used->count()), 'fail_rate' => $used->count() ? Format::percent($failed, $used->count()) : '—',
                     'tested' => $p->tested_at ? ($p->test_status ?: 'Đã kiểm tra').' · '.Format::when($p->tested_at) : 'Chưa kiểm tra'];
             })->values()->all(),
-            'personal_users' => Provider::whereNotNull('user_id')->distinct()->count('user_id'),
-            'personal_providers' => Provider::whereNotNull('user_id')->count(),
+            'personal_users' => Provider::whereNotNull('user_id')->when($kind, fn ($q) => $q->where('kind', $kind))->distinct()->count('user_id'),
+            'personal_providers' => Provider::whereNotNull('user_id')->when($kind, fn ($q) => $q->where('kind', $kind))->count(),
         ];
     }
 }

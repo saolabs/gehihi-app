@@ -68,6 +68,7 @@
 
 <script setup lang="ts">
     import { modelIds, modelChoices, toggleModel, type ModelField } from '@app/ProviderModels';
+    import { checkProviderKeys } from '@app/ProviderProbe';
     import { App } from '@saolabs/client';
     import { formValues, send } from '@admin/app/services/AdminHttp';
 
@@ -112,14 +113,20 @@
         setProbe([]);
         setMessage('');
         return run(async () => {
-            const data = await send('post', '/admin/providers/' + action, payload(form), 70000);
             if (action === 'discover') {
+                const data = await send('post', '/admin/providers/discover', payload(form), 70000);
                 setCatalog(data.models); syncChoices();
                 setMessage(type === 'google_vertex'
                     ? 'Đã nạp ' + data.models.length + ' model từ danh mục Vertex AI. Chọn model rồi bấm Kiểm tra key để xác nhận quyền sử dụng.'
                     : 'Đã tải ' + data.models.length + ' model. Tick các model muốn sử dụng rồi lưu provider.');
             } else {
-                setProbe(data.results.map((r: any) => ({ key: r.key, ok: r.ok, text: 'Key ' + r.key + ' · ' + (r.ok ? 'OK · ' + r.latency_ms + ' ms' : r.message) })));
+                await checkProviderKeys(payload(form), provider.key_count || 0,
+                    data => send('post', '/admin/providers/test', data, 70000),
+                    (results, index, count) => {
+                        setMessage('Đang kiểm tra key ' + index + '/' + count + '…');
+                        setProbe(results.map((r: any) => ({ key: r.key, ok: r.ok, text: 'Key ' + r.key + ' · ' + (r.ok ? 'OK · ' + r.latency_ms + ' ms' : r.message) })));
+                    }, () => form.isConnected);
+                setMessage('Đã kiểm tra xong các key.');
             }
         });
     }

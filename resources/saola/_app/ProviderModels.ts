@@ -5,11 +5,11 @@ export function modelIds(value = ''): string[] {
     return [...new Set(value.split(/[\n,]+/).map(id => id.trim()).filter(Boolean))];
 }
 
-/** Keep a saved model visible even when it disappears from a refreshed catalog. */
+/** Keep catalog order stable on selection; append saved/manual models missing from it. */
 export function modelChoices(catalog: string[] | null, fields: ModelFields, filter = '') {
     const selected = modelIds(fields.models);
     const vision = modelIds(fields.vision_models), reasoning = modelIds(fields.reasoning_models);
-    return [...new Set([...selected, ...(catalog || [])])]
+    return [...new Set([...(catalog || []), ...selected])]
         .filter(id => id.toLowerCase().includes(filter.trim().toLowerCase()))
         .map(id => ({ id, selected: selected.includes(id), stale: catalog !== null && !catalog.includes(id), vision: vision.includes(id), reasoning: reasoning.includes(id) }));
 }

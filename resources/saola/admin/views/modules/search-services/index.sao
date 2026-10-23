@@ -1,0 +1,89 @@
+@vars(groups = [], editAccount = null)
+@await
+@states({ services: groups, dialog: false, account: {}, accountName: '', accountType: '', accountUrl: '', accountKeys: '', accountEnabled: true, accountDefault: false, error: '', busy: false, results: [], progress: '' })
+
+<template>
+@extends(__layout__ + 'base')
+@section('meta:title', 'Dịch vụ tìm kiếm · Quản trị Gehihi')
+@block('content')
+<section @keydown(onKey(event))>
+    <header class="adm-page-head"><div><h1>Dịch vụ tìm kiếm</h1><p class="muted">Nguồn tra cứu web cho Tra cứu web và Nghiên cứu sâu.</p></div></header>
+    <p class="search-services-note">Mỗi dịch vụ có thể có nhiều tài khoản, mỗi tài khoản có nhiều key. Các tài khoản cùng dịch vụ và các key sẽ được dùng luân phiên; key gặp lỗi hoặc hết quota được tạm bỏ qua.</p>
+    @if(error && !dialog)<p class="inline-error" role="alert">{{ error }}</p>@endif
+    <div class="search-services-grid">
+    @foreach(services as service)
+        @key(service['type'])
+        <section class="adm-card search-service-card">
+            <header class="search-service-head"><span class="provider-icon"><svg class="i" aria-hidden="true"><use href="#i-search"></use></svg></span><div><h2>{{ service['label'] }}</h2><p>{{ service['accounts'].length }} tài khoản · {{ service['key_count'] }} key</p></div><button id="search-add-{{ service['type'] }}" class="small-button" @disabled(busy) @click(createAccount(service))><svg class="i" aria-hidden="true"><use href="#i-plus"></use></svg>Thêm tài khoản</button></header>
+            @foreach(service['accounts'] as item)
+                @key(item['id'])
+                <div class="search-account-row"><div><strong>{{ item['name'] }}</strong><small>{{ item['keys'] }} key{{ item['is_default'] ? ' · ưu tiên' : '' }}</small><span class="adm-status {{ item['status'] }}"><i></i>{{ item['status_label'] }}</span></div><button class="small-button" @disabled(busy) @click(edit(item['id']))>Sửa</button><button class="icon-button small danger" aria-label="Xóa {{ item['name'] }}" @disabled(busy) @click(remove(item))><svg class="i" aria-hidden="true"><use href="#i-trash"></use></svg></button></div>
+            @endforeach
+            @if(service['accounts'].length === 0)<p class="muted-caption search-service-empty">Chưa có tài khoản. Thêm tài khoản để bật dịch vụ này.</p>@endif
+        </section>
+    @endforeach
+    </div>
+    @if(dialog)
+    <div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Cấu hình tài khoản tìm kiếm"><button class="icon-button modal-close" aria-label="Đóng cấu hình" @click(closeDialog())><svg class="i" aria-hidden="true"><use href="#i-x"></use></svg></button>
+        <h2>{{ account['id'] ? 'Sửa tài khoản' : 'Thêm tài khoản' }} · {{ account['label'] }}</h2>
+        <p class="modal-description">@if(accountType === 'searxng')SearXNG cần địa chỉ máy chủ do bạn hoặc quản trị viên cung cấp. Không cần API key.@else Các tài khoản cùng dịch vụ được dùng luân phiên. Key được mã hóa và không gửi trở lại trình duyệt.@endif</p>
+        <form class="adm-form" @submit(save(event))>
+            <label>Tên tài khoản<input name="name" required maxlength="100" @bind(accountName) placeholder="Ví dụ: Tài khoản nhóm nội dung"></label>
+            @if(account['editable_base'])<label>Địa chỉ máy chủ SearXNG<small>Máy chủ cần bật trả kết quả JSON. Nếu chưa có máy chủ, hãy dùng dịch vụ tìm kiếm có API key như Tavily hoặc Serper.</small><input name="base_url" required type="url" maxlength="400" @bind(accountUrl) placeholder="https://search.example.com"></label>@endif
+            @if(accountType !== 'searxng')<label>API keys<small>@if(account['key_count'])Đã lưu {{ account['key_count'] }} key. Để trống để giữ nguyên.@else Mỗi key một dòng; tự luân phiên khi có nhiều key.@endif</small><textarea name="api_keys" rows="4" @bind(accountKeys) autocomplete="off" spellcheck="false" placeholder="Mỗi key một dòng"></textarea></label>@endif
+            <div class="checkboxes"><label><input name="enabled" type="checkbox" checked="{{ accountEnabled }}" @change(setAccountEnabled(checked(event)))>Bật tài khoản</label><label><input name="is_default" type="checkbox" checked="{{ accountDefault }}" @change(setAccountDefault(checked(event)))>Ưu tiên dịch vụ này</label>@if(account['key_count'])<label><input name="clear_keys" type="checkbox">Xóa key đã lưu</label>@endif</div>
+            @if(progress)<p class="muted-caption" role="status">{{ progress }}</p>@endif
+            @foreach(results as result) @key(result['key'])<p class="{{ result['ok'] ? 'test-ok' : 'test-error' }}">Key {{ result['key'] }} · {{ result['ok'] ? result['text'] : result['message'] }}</p>@endforeach
+            @if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
+            <div class="form-footer"><button type="button" class="small-button" @disabled(busy) @click(check(event))>Kiểm tra kết nối</button><button type="button" class="quiet-button" @disabled(busy) @click(closeDialog())>Hủy</button><button class="primary-button" @disabled(busy)>Lưu tài khoản</button></div>
+        </form>
+    </section></div>
+    @endif
+</section>
+@endblock
+</template>
+
+<script setup lang="ts">
+    import { formValues, send } from '@admin/app/services/AdminHttp';
+    import { checkProviderKeys } from '@app/ProviderProbe';
+    function checked(event: Event) { return (event.target as HTMLInputElement).checked; }
+    function show(item: any) {
+        const service = services.find((s: any) => s.type === item.type);
+        setAccount({ ...item, label: service.label, editable_base: service.editable_base });
+        setAccountType(item.type); setAccountName(item.name || ''); setAccountUrl(item.base_url || ''); setAccountKeys('');
+        setAccountEnabled(item.enabled ?? true); setAccountDefault(item.is_default ?? false); setError(''); setResults([]); setProgress(''); setDialog(true);
+        requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[aria-label="Cấu hình tài khoản tìm kiếm"] input[name="name"]')?.focus());
+    }
+    function createAccount(service: any) { show({ type: service.type }); }
+    async function edit(id: string) { try { show((await send('get', '/admin/search-services/' + id)).account); } catch (e: any) { setError(e.message); } }
+    function closeDialog() { setDialog(false); setAccountKeys(''); setError(''); document.getElementById('search-add-' + accountType)?.focus(); }
+    function onKey(event: KeyboardEvent) {
+        if (!dialog) return;
+        if (event.key === 'Escape') closeDialog();
+        if (event.key === 'Tab') {
+            const items = Array.from(document.querySelectorAll<HTMLElement>('[aria-label="Cấu hình tài khoản tìm kiếm"] button:not([disabled]), [aria-label="Cấu hình tài khoản tìm kiếm"] input, [aria-label="Cấu hình tài khoản tìm kiếm"] textarea'));
+            if (event.shiftKey && document.activeElement === items[0]) { event.preventDefault(); items.at(-1)?.focus(); }
+            else if (!event.shiftKey && document.activeElement === items.at(-1)) { event.preventDefault(); items[0]?.focus(); }
+        }
+    }
+    function payload(form: HTMLFormElement) { return { ...formValues(form), type: accountType, id: account.id || null, models: '' }; }
+    async function save(event: Event) {
+        event.preventDefault(); const form = event.currentTarget as HTMLFormElement;
+        setBusy(true); setError('');
+        try { const data = await send(account.id ? 'put' : 'post', '/admin/search-services' + (account.id ? '/' + account.id : ''), payload(form)); setServices(data.groups); closeDialog(); }
+        catch (e: any) { setError(e.message); } finally { setBusy(false); }
+    }
+    async function check(event: Event) {
+        const form = (event.currentTarget as HTMLElement).closest('form')!;
+        setBusy(true); setError(''); setResults([]);
+        try { await checkProviderKeys(payload(form), account.key_count || 0, data => send('post', '/admin/search-services/test', data, 70000), (results, index, count) => { setResults(results); setProgress('Đang kiểm tra key ' + index + '/' + count + '…'); }, () => form.isConnected && dialog); setProgress('Đã kiểm tra xong.'); }
+        catch (e: any) { setError(e.message); } finally { setBusy(false); }
+    }
+    async function remove(item: any) {
+        if (!confirm('Xóa tài khoản ' + item.name + '?')) return;
+        setBusy(true); setError('');
+        try { setServices((await send('delete', '/admin/search-services/' + item.id)).groups); } catch (e: any) { setError(e.message); } finally { setBusy(false); }
+    }
+    function mounted() { if (editAccount) show(editAccount); }
+    async function resumed() { try { setServices((await send('get', '/admin/search-services')).groups); } catch (e: any) { setError(e.message); } }
+</script>

@@ -17,7 +17,7 @@ class ProviderController extends AdminController
 
     public function index()
     {
-        return $this->response($this->health->providers());
+        return $this->response($this->health->providers('llm'));
     }
 
     public function create()
@@ -27,12 +27,15 @@ class ProviderController extends AdminController
 
     public function edit(string $id)
     {
-        return $this->response($this->form($this->providers->form(Provider::whereNull('user_id')->findOrFail($id))), '@RAW:modules.providers.form');
+        $provider = Provider::whereNull('user_id')->findOrFail($id);
+        if ($provider->kind === 'search') return redirect('/admin/search-services?edit='.$id);
+        return $this->response($this->form($this->providers->form($provider)), '@RAW:modules.providers.form');
     }
 
     private function form(array $provider): array
     {
-        $types = array_map(fn ($value, $meta) => ['value' => $value, 'label' => $meta['label'], 'kind' => $meta['kind'], 'base_url_editable' => ProviderCatalog::editableBaseUrl($value)], array_keys(ProviderCatalog::TYPES), ProviderCatalog::TYPES);
+        $catalog = ProviderCatalog::types('llm');
+        $types = array_map(fn ($value, $meta) => ['value' => $value, 'label' => $meta['label'], 'kind' => $meta['kind'], 'base_url_editable' => ProviderCatalog::editableBaseUrl($value)], array_keys($catalog), array_values($catalog));
 
         $provider['base_url_editable'] = ProviderCatalog::editableBaseUrl($provider['type']);
         $provider['keys_hint'] = $provider['key_count'] ? 'Đã lưu '.$provider['key_count'].' key. Để trống để giữ nguyên.' : 'Mỗi key một dòng.';
@@ -46,7 +49,7 @@ class ProviderController extends AdminController
 
     public function store(Request $r)
     {
-        $this->providers->save(null, null, $r->validate(ProviderService::rules()));
+        $this->providers->save(null, null, $r->validate(ProviderService::rules('llm')));
 
         return $this->result(['saved' => true], 201);
     }
@@ -54,7 +57,7 @@ class ProviderController extends AdminController
     public function update(Request $r, string $id)
     {
         Provider::whereNull('user_id')->findOrFail($id);
-        $this->providers->save($id, null, $r->validate(ProviderService::rules()));
+        $this->providers->save($id, null, $r->validate(ProviderService::rules('llm')));
 
         return $this->result(['saved' => true]);
     }
@@ -63,16 +66,17 @@ class ProviderController extends AdminController
     {
         $this->providers->remove($id, null);
 
-        return $this->result($this->health->providers());
+        return $this->result($this->health->providers('llm'));
     }
 
     public function test(Request $r)
     {
-        return $this->result(['results' => $this->probe->test($this->providers->draft($r->input('id'), null, $r->validate(ProviderService::rules())))]);
+        $data = $r->validate([...ProviderService::rules('llm'), 'key_index' => ['sometimes', 'integer', 'min:1', 'max:20']]);
+        return $this->result(['results' => $this->probe->test($this->providers->draft($r->input('id'), null, $data), $data['key_index'] ?? null)]);
     }
 
     public function discover(Request $r)
     {
-        return $this->result(['models' => $this->providers->discover($r->input('id'), null, $r->validate(ProviderService::rules()))]);
+        return $this->result(['models' => $this->providers->discover($r->input('id'), null, $r->validate(ProviderService::rules('llm')))]);
     }
 }

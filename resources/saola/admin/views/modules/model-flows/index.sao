@@ -1,0 +1,46 @@
+@vars(stages = [], options = [])
+@await
+@states({ steps: stages, choices: options, busy: false, error: '', notice: '' })
+
+<template>
+@extends(__layout__ + 'base')
+@section('meta:title', 'Luồng model · Quản trị Gehihi')
+@block('content')
+<header class="adm-page-head"><div><h1>Luồng model</h1><p class="muted">Chọn model cho từng bước trong Tra cứu web và Nghiên cứu sâu.</p></div></header>
+<p class="search-services-note">Áp dụng cho lượt chạy mới. Để trống để dùng model đang chọn trong chat. Người dùng có thể cấu hình riêng trong Cài đặt → Luồng model.</p>
+<form class="model-flow-form" @submit(save(event))>
+    @if(error)<p class="inline-error" role="alert">{{ error }}</p>@endif
+    @if(notice)<p class="test-ok" role="status">{{ notice }}</p>@endif
+    @foreach(steps as step)
+    @key(step['id'])
+    <section class="adm-card model-flow-step">
+        <div class="model-flow-title"><span class="provider-icon"><svg class="i" aria-hidden="true"><use href="#i-sparkles"></use></svg></span><div><h2>{{ step['label'] }}</h2><p class="muted-caption">{{ step['description'] }}</p></div></div>
+        <div class="two-columns">
+            <label>Model cho bước này<select aria-label="{{ step['label'] }} · Model" value="{{ step['value'] }}" @change(change(step['id'], 'value', event))><option value="" @selected(!step['value'])>Dùng model đang chọn trong chat</option>@if(step['unavailable'])<option value="{{ step['value'] }}" selected>Model đã lưu không còn khả dụng — chọn lại</option>@endif @foreach(choices as choice)<option value="{{ choice['value'] }}" @selected(step['value'] === choice['value'])>{{ choice['label'] }}</option>@endforeach</select></label>
+            <label>Model dự phòng<select aria-label="{{ step['label'] }} · Dự phòng" value="{{ step['fallback'] }}" @disabled(!step['value']) @change(change(step['id'], 'fallback', event))><option value="" @selected(!step['fallback'])>Không tự chuyển model</option>@if(step['fallback_unavailable'])<option value="{{ step['fallback'] }}" selected>Model dự phòng không còn khả dụng — chọn lại</option>@endif @foreach(choices as choice)<option value="{{ choice['value'] }}" @selected(step['fallback'] === choice['value'])>{{ choice['label'] }}</option>@endforeach</select></label>
+        </div>
+    </section>
+    @endforeach
+    @if(choices.length === 0)<p class="muted-caption">Chưa có model hệ thống đang bật. Thêm model tại <a href="/admin/providers">Provider AI</a>.</p>@endif
+    <p class="muted-caption">Chỉ chuyển sang model dự phòng đã chọn khi model chính gặp lỗi. Trò chuyện thông thường vẫn dùng model trong chat.</p>
+    <div class="adm-actions"><button type="button" class="small-button" @disabled(busy) @click(reset())>Dùng model trong chat cho mọi bước</button><button class="primary-button" @disabled(busy)>{{ busy ? 'Đang lưu…' : 'Lưu luồng model' }}</button></div>
+</form>
+@endblock
+</template>
+
+<script setup lang="ts">
+    import { send } from '@admin/app/services/AdminHttp';
+    import { flowPayload } from '@app/ModelFlows';
+    function change(id: string, field: string, event: Event) {
+        const value = (event.target as HTMLSelectElement).value;
+        setSteps(steps.map((s: any) => s.id === id ? { ...s, [field]: value, ...(field === 'value' ? { unavailable: false, ...(!value ? { fallback: '', fallback_unavailable: false } : {}) } : { fallback_unavailable: false }) } : s));
+        setNotice('');
+    }
+    function reset() { setSteps(steps.map((s: any) => ({ ...s, value: '', fallback: '', unavailable: false, fallback_unavailable: false }))); setNotice(''); }
+    async function save(event: Event) {
+        event.preventDefault(); setBusy(true); setError(''); setNotice('');
+        try { const data = await send('put', '/admin/model-flows', flowPayload(steps)); setSteps(data.stages); setChoices(data.options); setNotice('Đã lưu luồng model. Áp dụng từ lượt chạy mới.'); }
+        catch (e: any) { setError(e.message); } finally { setBusy(false); }
+    }
+    async function resumed() { try { const data = await send('get', '/admin/model-flows'); setSteps(data.stages); setChoices(data.options); setError(''); setNotice(''); } catch (e: any) { setError(e.message); } }
+</script>

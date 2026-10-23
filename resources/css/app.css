@@ -496,6 +496,34 @@ button, a, label { -webkit-tap-highlight-color: transparent; }
 .admin-link { margin-top: 4px; color: var(--muted); }
 .adm-content { display: flex; flex-direction: column; gap: 16px; padding: 24px; max-width: 1180px; width: 100%; margin: 0 auto; transition: opacity .15s; }
 .adm-card { padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
+.search-services-note { margin: 0 0 18px; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+.model-flow-form { display: flex; flex-direction: column; gap: 16px; }
+.model-flow-title { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.model-flow-title h2, .model-flow-title h3 { margin: 0 0 4px; font-size: 16px; }
+.model-flow-title p { margin: 0; }
+.model-flow-step { min-width: 0; }
+.model-flow-step label { display: flex; flex-direction: column; gap: 7px; min-width: 0; font-size: 13px; font-weight: 500; }
+.model-flow-step select { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); font: inherit; }
+.model-flow-step select:focus { outline: 2px solid var(--brand); outline-offset: 2px; }
+.model-flow-step select:disabled { opacity: .55; }
+.search-services-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.search-service-card { min-width: 0; }
+.search-service-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.search-service-head > div { flex: 1; min-width: 100px; }
+.search-service-head h2, .search-service-head h3 { margin: 0; font-size: 16px; }
+.search-service-head p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.search-service-head > button { flex: none; }
+.search-service-empty { padding: 14px 0 4px; margin-bottom: 0; }
+.search-account-row { display: flex; align-items: center; gap: 8px; padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--line); }
+.search-account-row > div { flex: 1; min-width: 0; }
+.search-account-row strong { display: block; overflow-wrap: anywhere; font-size: 13.5px; }
+.search-account-row small { display: block; color: var(--muted); font-size: 12px; }
+.search-account-row .adm-status { margin-top: 4px; }
+.search-settings-entry { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px; margin: 14px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-subtle); text-align: left; }
+.search-settings-entry > span { flex: 1; }
+.search-settings-entry strong, .search-settings-entry small { display: block; }
+.search-settings-entry small { color: var(--muted); font-size: 12px; margin-top: 2px; }
+@media (max-width: 760px) { .search-services-grid { grid-template-columns: 1fr; } }
 .adm-card-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
 .adm-card-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .adm-card-head p, .adm-card-head > .muted { margin: 2px 0 0; font-size: 13.5px; }

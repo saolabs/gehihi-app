@@ -10,10 +10,16 @@ class ProviderProbe
 {
     public function __construct(private TextGateway $gateway, private SearchGateway $search) {}
 
-    public function test(Provider $p): array
+    public function test(Provider $p, ?int $keyIndex = null): array
     {
         $results = [];
+        if ($keyIndex !== null) {
+            abort_unless($keyIndex >= 1 && $keyIndex <= count(($p->secrets ?? []) ?: [null]), 422, 'Vị trí key không hợp lệ.');
+            // UI checks one key per request; allow the outbound request's 60s timeout.
+            if (PHP_SAPI !== 'cli') set_time_limit(70);
+        }
         foreach (($p->secrets ?? []) ?: [null] as $i => $key) {
+            if ($keyIndex !== null && $keyIndex !== $i + 1) continue;
             $p->secrets = $key ? [$key] : [];
             $start = microtime(true);
             try {
