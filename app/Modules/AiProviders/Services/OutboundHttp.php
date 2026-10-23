@@ -40,7 +40,7 @@ class OutboundHttp
 
     public function send(string $method, string $url, array $headers = [], array $body = [], int $timeout = 60)
     {
-        $request = Http::withOptions($this->options($url))->withHeaders($headers)->connectTimeout(10)->timeout($timeout);
+        $request = Http::withOptions($this->options($url))->setHandler(new CurlStreamHandler)->withHeaders($headers)->connectTimeout(10)->timeout($timeout);
         try {
             return $method === 'GET' ? $request->get($url) : $request->post($url, $body);
         } catch (ConnectionException $e) {

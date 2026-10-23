@@ -19,6 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn ($request) => '/?login=1&next='.urlencode('/'.$request->path()));
     })->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['api_key', 'api_keys', 'password', 'password_confirmation']);
+        $exceptions->render(function (ProviderFailure $e, $request) {
+            if ($request->is('admin/providers/*') && $request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+        });
         $exceptions->render(function (Throwable $e, $request) {
             if ($request->is('api/*')) {
                 $status = $e instanceof ModelNotFoundException ? 404 : ($e instanceof AuthenticationException ? 401 : ($e instanceof ProviderFailure ? 422 : ($e instanceof ValidationException ? 422

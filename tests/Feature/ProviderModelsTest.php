@@ -102,6 +102,15 @@ class ProviderModelsTest extends TestCase
         Http::assertSent(fn ($r) => $r->url() === 'https://google.serper.dev/search' && $r->hasHeader('X-API-KEY', 'search-key'));
     }
 
+    public function test_admin_discovery_reports_provider_failures_without_generic_server_error(): void
+    {
+        $this->actingAs($this->user(true));
+        Http::fake(['aiplatform.googleapis.com/*' => Http::response(['error' => ['message' => 'Upstream private detail']], 403)]);
+        $this->postJson('/admin/providers/discover', $this->form())->assertUnprocessable()
+            ->assertJsonPath('message', 'Không tải được danh sách model: HTTP 403')
+            ->assertDontSee('Upstream private detail');
+    }
+
 
     /** Gửi một lượt qua gateway và trả body request thực gửi đi. */
     private function sentBody(string $type, string $model, string $thinking, bool $reasoning = true, int $limit = 4096): array
