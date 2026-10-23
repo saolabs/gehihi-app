@@ -222,8 +222,10 @@ button, a, label { -webkit-tap-highlight-color: transparent; }
 
 /* ── Conversation area ───────────────────────────── */
 .conversation-scroll { flex: 1; min-height: 0; overflow-y: auto; scroll-behavior: smooth; }
-.is-welcome .conversation-scroll { display: flex; flex-direction: column; justify-content: flex-end; overflow: visible; }
-.is-welcome .composer-region { flex: 1; }
+/* Màn chào: lời chào + ô nhập là một khối, căn giữa và nhích lên trên (khoảng dưới lớn hơn khoảng trên). */
+.is-welcome .conversation-scroll { flex: none; margin-top: auto; overflow: visible; }
+.is-welcome .composer-region { margin-bottom: auto; padding-bottom: max(12px, 12vh); }
+.is-welcome .main-panel { overflow-y: auto; } /* màn thấp: khối dài hơn màn thì cuộn, không bị cắt */
 
 .welcome { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 24px 28px; }
 .welcome-mark { width: 64px; height: 64px; margin-bottom: 18px; filter: drop-shadow(0 10px 20px var(--brand-glow)); }
@@ -566,7 +568,7 @@ button, a, label { -webkit-tap-highlight-color: transparent; }
     .topbar-brand { display: inline-flex; }
     .banner { padding: 8px 14px; }
     .messages { padding: 20px 14px 8px; }
-    .composer-region { padding: 6px 12px max(10px, env(safe-area-inset-bottom)); }
+    .composer-region, .is-welcome .composer-region { padding: 6px 12px max(10px, env(safe-area-inset-bottom)); }
     .suggestions { grid-template-columns: 1fr; gap: 8px; }
     .run-status, .resume-button, .source-grid { margin-left: 0; }
 }
