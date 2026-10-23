@@ -4,6 +4,10 @@ namespace App\Modules\AiProviders\Services;
 
 class ProviderCatalog
 {
+    // Same curated text catalog as seo-expert/services/google-provider/catalog.json (2026-10-17.1).
+    // Loading this catalog does not validate a credential; generation/probe does that separately.
+    public const VERTEX_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+
     public const TYPES = [
         'google' => ['label' => 'Google Gemini', 'kind' => 'llm', 'base' => 'https://generativelanguage.googleapis.com/v1beta'],
         'google_vertex' => ['label' => 'Google Cloud (Vertex AI)', 'kind' => 'llm', 'base' => 'https://aiplatform.googleapis.com/v1/publishers/google'],

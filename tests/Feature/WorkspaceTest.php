@@ -123,9 +123,12 @@ class WorkspaceTest extends TestCase
         $this->provider();
         Http::fake(['api.example.test/*' => fn () => $this->response()]);
         $c = $this->conversation();
+        $this->postJson('/api/conversations/'.$c.'/runs', ['request_id' => (string) Str::uuid(), 'message' => '', 'mode' => 'chat'])
+            ->assertUnprocessable()->assertJsonValidationErrors('message');
         $first = $this->start($c);
         app(Executor::class)->execute($first['id']);
-        $second = $this->start($c, ['regenerate_id' => $first['message_id']]);
+        // The client's Tạo lại button sends an empty message, normalized to null.
+        $second = $this->start($c, ['regenerate_id' => $first['message_id'], 'message' => '']);
         app(Executor::class)->execute($second['id']);
         $detail = $this->getJson('/api/conversations/'.$c)->json('data');
         $this->assertCount(3, $detail['messages']);

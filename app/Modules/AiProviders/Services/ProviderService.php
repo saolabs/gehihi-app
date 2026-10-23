@@ -186,24 +186,21 @@ return $out;
         if ($p->kind === 'search') {
             return [];
         }
+        if ($p->type === 'google_vertex') {
+            return ProviderCatalog::VERTEX_MODELS;
+        }
         $headers = $this->headers($p, ($p->secrets ?? [])[0] ?? null);
         $base = ProviderCatalog::baseUrl($p->type, $p->base_url).'/models';
-        if ($p->type === 'google_vertex') {
-            $base = preg_replace('#/v1/#', '/v1beta1/', $base);
-        }
         $ids = [];
         $cursor = null;
         for ($page = 0; $page < 20; $page++) {
-            $google = in_array($p->type, ['google', 'google_vertex'], true);
+            $google = $p->type === 'google';
             $query = $google ? ['pageSize' => 1000] : ($p->type === 'anthropic' ? ['limit' => 1000] : []);
             if ($cursor) {
                 $query[$google ? 'pageToken' : 'after_id'] = $cursor;
             }
             $r = $this->http->send('GET', $base.($query ? '?'.http_build_query($query) : ''), $headers);
             if (! $r->successful()) {
-                if ($p->type === 'google_vertex' && in_array($r->status(), [401, 403], true)) {
-                    throw new ProviderFailure('Google không cho tải danh sách model bằng key Vertex Express Mode này. Hãy thêm Model ID rồi bấm Kiểm tra key; lỗi tải danh sách không có nghĩa key không dùng được.', $r->status());
-                }
                 throw new ProviderFailure('Không tải được danh sách model: HTTP '.$r->status(), $r->status());
             }
             $payload = $this->http->json($r);
@@ -213,10 +210,6 @@ return $out;
                 }$model = $row['id'] ?? $row['name'] ?? null;
                 if ($model) {
                     $model = preg_replace('#^(?:publishers/google/)?models/#', '', $model);
-                    // This gateway serves Gemini text/vision, not embedding, audio or image generation.
-                    if ($p->type === 'google_vertex' && (! str_starts_with($model, 'gemini-') || preg_match('/image|embedding|tts|audio|live|robotics/', $model))) {
-                        continue;
-                    }
                     $ids[] = $model;
                 }
             }

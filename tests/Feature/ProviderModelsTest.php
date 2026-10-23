@@ -43,17 +43,26 @@ class ProviderModelsTest extends TestCase
         $this->patchJson('/api/providers/'.$id, [...$this->form(), 'default_model' => 'unknown'])->assertUnprocessable();
     }
 
-    public function test_vertex_catalog_paginates_and_does_not_overwrite_saved_selection(): void
+    public function test_vertex_uses_curated_catalog_without_upstream_auth_or_overwriting_saved_selection(): void
     {
         $this->actingAs($this->user());
         $id = $this->postJson('/api/providers', $this->form())->assertOk()->json('data.id');
-        Http::fake(['aiplatform.googleapis.com/*' => Http::sequence()
-            ->push(['publisherModels' => [['name' => 'publishers/google/models/gemini-text'], ['name' => 'publishers/google/models/text-embedding'], ['name' => 'publishers/google/models/gemini-image']], 'nextPageToken' => 'next'])
-            ->push(['publisherModels' => [['name' => 'publishers/google/models/gemini-vision']]])]);
+        Http::fake(['aiplatform.googleapis.com/*' => Http::response([], 401)]);
         $this->postJson('/api/providers/discover', [...$this->form(), 'id' => $id, 'api_keys' => '', 'models' => ''])
-            ->assertOk()->assertJsonPath('data', ['gemini-text', 'gemini-vision']);
-        Http::assertSent(fn ($r) => str_contains($r->url(), '/v1beta1/publishers/google/models?') && str_contains($r->url(), 'pageToken=next') && $r->hasHeader('x-goog-api-key', 'private-vertex-key') && ! $r->hasHeader('Authorization'));
+            ->assertOk()->assertJsonPath('data', ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite']);
+        Http::assertNothingSent();
         $this->assertSame(['gemini-text', 'gemini-vision'], Provider::findOrFail($id)->models);
+    }
+
+    public function test_google_catalog_still_paginates_and_filters_non_generation_models(): void
+    {
+        $this->actingAs($this->user());
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::sequence()
+            ->push(['models' => [['name' => 'models/gemini-text', 'supportedGenerationMethods' => ['generateContent']], ['name' => 'models/embedding', 'supportedGenerationMethods' => ['embedContent']]], 'nextPageToken' => 'next'])
+            ->push(['models' => [['name' => 'models/gemini-vision', 'supportedGenerationMethods' => ['generateContent']]]])]);
+        $this->postJson('/api/providers/discover', [...$this->form(), 'type' => 'google', 'models' => ''])
+            ->assertOk()->assertJsonPath('data', ['gemini-text', 'gemini-vision']);
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'pageToken=next') && $r->hasHeader('x-goog-api-key', 'private-vertex-key'));
     }
 
     public function test_vertex_stream_uses_google_payload_and_ignores_thought_text(): void
@@ -66,6 +75,23 @@ class ProviderModelsTest extends TestCase
         $this->assertSame(['OK'], $pieces);
         $this->assertSame(['text' => 'OK', 'tokens' => 19, 'metering' => 'reported'], $result);
         Http::assertSent(fn ($r) => $r->url() === ProviderCatalog::TYPES['google_vertex']['base'].'/models/gemini-test:streamGenerateContent?alt=sse' && $r->hasHeader('x-goog-api-key', 'vertex-key') && $r['systemInstruction']['parts'][0]['text'] === 'Be concise' && $r['contents'][0]['parts'][1]['inlineData']['mimeType'] === 'image/png');
+    }
+
+    public function test_curated_vertex_key_probes_leave_room_for_text_without_changing_capabilities(): void
+    {
+        foreach (ProviderCatalog::VERTEX_MODELS as $model) {
+            $p = new Provider(['name' => 'Probe', 'type' => 'google_vertex', 'kind' => 'llm', 'base_url' => '', 'secrets' => ['probe-key'], 'models' => [$model], 'default_model' => $model, 'capabilities' => ['models' => [$model => ['reasoning' => false]]]]);
+            Http::fake(function ($r) {
+                $hasBudget = $r['generationConfig']['maxOutputTokens'] >= 1024 && $r['generationConfig']['thinkingConfig']['thinkingLevel'] === 'low';
+                $event = ['candidates' => [['content' => ['parts' => $hasBudget ? [['text' => 'OK']] : []], 'finishReason' => $hasBudget ? 'STOP' : 'MAX_TOKENS']]];
+
+                return Http::response('data: '.json_encode($event)."\n\n", 200, ['Content-Type' => 'text/event-stream']);
+            });
+            $results = app(\App\Modules\AiProviders\Services\ProviderProbe::class)->test($p);
+            $this->assertTrue($results[0]['ok'], $model);
+            $this->assertSame('OK', $results[0]['text']);
+            $this->assertFalse($p->capabilities['models'][$model]['reasoning']);
+        }
     }
 
     public function test_admin_form_renders_saved_models_without_client_only_helpers(): void
@@ -111,12 +137,13 @@ class ProviderModelsTest extends TestCase
             ->assertDontSee('Upstream private detail');
     }
 
-    public function test_vertex_catalog_denial_explains_manual_model_check_without_invalidating_key(): void
+    public function test_admin_vertex_catalog_lists_three_models_without_calling_google(): void
     {
         $this->actingAs($this->user(true));
         Http::fake(['aiplatform.googleapis.com/*' => Http::response([], 401)]);
-        $this->postJson('/admin/providers/discover', $this->form())->assertUnprocessable()
-            ->assertJsonPath('message', 'Google không cho tải danh sách model bằng key Vertex Express Mode này. Hãy thêm Model ID rồi bấm Kiểm tra key; lỗi tải danh sách không có nghĩa key không dùng được.');
+        $this->postJson('/admin/providers/discover', [...$this->form(), 'models' => ''])->assertOk()
+            ->assertJsonPath('data.models', ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite']);
+        Http::assertNothingSent();
     }
 
 

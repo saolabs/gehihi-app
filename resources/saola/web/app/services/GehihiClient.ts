@@ -2,9 +2,14 @@ import { modelIds, modelChoices, toggleModel, type ModelField } from '@app/Provi
 
 type Data = Record<string, any>;
 export class GehihiClient {
-    state: Data = { loading: true, busy: false, error: '', notice: '', locale: 'vi', theme: 'system', workspace: {}, user: null, projects: [], conversations: [], files: [], catalog: [], models: [], providers: [], providerTypes: {}, providerModelCatalog: null, providerModelFilter: '', providerModelChoices: [], providerSelectedModels: [], conversation: null, project: null, messages: [], visibleMessages: [], run: null, mode: 'chat', thinking: 'auto', selectedModel: '', searchProvider: '', selectedFiles: [], modal: '', editProvider: {}, editProject: {}, systemProviders: false, probe: null, search: '', archived: false, mobileNav: false, usage: {}, sourcePanel: false, advanced: false, fallbacks: [], includeDomains: '', excludeDomains: '', language: 'vi', country: 'vn', import_available: false, resetToken: '', resetEmail: '', researchNote: '', trashGroups: [] };
+    state: Data = { loading: true, busy: false, error: '', notice: '', locale: 'vi', theme: 'system', workspace: {}, user: null, projects: [], conversations: [], files: [], catalog: [], models: [], providers: [], providerTypes: {}, providerModelCatalog: null, providerModelFilter: '', providerModelChoices: [], providerSelectedModels: [], conversation: null, project: null, messages: [], visibleMessages: [], run: null, mode: 'chat', thinking: 'auto', selectedModel: '', searchProvider: '', selectedFiles: [], modal: '', editProvider: {}, editProject: {}, systemProviders: false, probe: null, search: '', archived: false, mobileNav: false, usage: {}, sourcePanel: false, advanced: false, fallbacks: [], includeDomains: '', excludeDomains: '', language: 'vi', country: 'vn', import_available: false, guestImportPrompt: false, resetToken: '', resetEmail: '', researchNote: '', trashGroups: [] };
     private polling?: ReturnType<typeof setTimeout>;
     private fileWatch?: ReturnType<typeof setTimeout>;
+    private guestImportTimer?: ReturnType<typeof setTimeout>;
+    private guestImportKey = '';
+    private runTimer?: ReturnType<typeof setInterval>;
+    private timedRun = '';
+    private runStarted = 0;
     private pendingFiles = new Set<string>();
     private disposed = false;
     private requestId?: string;
@@ -13,6 +18,8 @@ export class GehihiClient {
     constructor(private emit: (state: Data) => void) { window.addEventListener('popstate', this.pop); }
     patch(data: Data) {
         this.state = { ...this.state, ...data };
+        if ('import_available' in data) this.syncGuestImportPrompt();
+        if ('run' in data) this.syncRunTimer();
         const all = this.state.conversation?.messages || [];
         const map = new Map<string, Data>(all.map((m: Data) => [m.id, m]));
         const chain: Data[] = [];
@@ -24,6 +31,45 @@ export class GehihiClient {
         this.state.providerSelectedModels = modelIds(this.state.editProvider.models);
         this.state.providerModelChoices = modelChoices(this.state.providerModelCatalog, this.state.editProvider, this.state.providerModelFilter);
         this.emit({ ...this.state });
+    }
+    private syncRunTimer() {
+        const run = this.state.run;
+        this.state.runActive = !!run && ['queued', 'running'].includes(run.status);
+        if (run?.id !== this.timedRun) {
+            this.timedRun = run?.id || '';
+            this.runStarted = Date.now();
+        }
+        const started = Date.parse(run?.created_at || run?.started_at || '');
+        if (Number.isFinite(started)) this.runStarted = started;
+        const end = Date.parse(run?.finished_at || '');
+        const seconds = Math.max(0, Math.floor(((Number.isFinite(end) ? end : Date.now()) - this.runStarted) / 1000));
+        this.state.runElapsed = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+        if (!this.state.runActive || this.disposed) {
+            clearInterval(this.runTimer);
+            this.runTimer = undefined;
+        } else if (!this.runTimer) {
+            this.runTimer = setInterval(() => this.patch({ run: this.state.run }), 1000);
+        }
+    }
+    private syncGuestImportPrompt() {
+        if (!this.state.import_available || !this.state.user) {
+            clearTimeout(this.guestImportTimer);
+            this.state.guestImportPrompt = false;
+            return;
+        }
+        const key = 'gehihi:guest-import-dismissed:' + this.state.user.id + ':' + this.state.workspace.id;
+        if (this.guestImportKey === key) return;
+        clearTimeout(this.guestImportTimer);
+        this.state.guestImportPrompt = false;
+        this.guestImportKey = key;
+        try { if (sessionStorage.getItem(key)) return; } catch { /* Storage can be unavailable in private browsers. */ }
+        this.state.guestImportPrompt = true;
+        this.guestImportTimer = setTimeout(() => this.dismissGuestImportPrompt(), 10000);
+    }
+    dismissGuestImportPrompt() {
+        clearTimeout(this.guestImportTimer);
+        try { if (this.guestImportKey) sessionStorage.setItem(this.guestImportKey, '1'); } catch { /* Keep dismissal for this page in memory. */ }
+        this.patch({ guestImportPrompt: false });
     }
     async api(path: string, method = 'GET', body?: any): Promise<any> {
         const headers: Record<string, string> = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
@@ -223,7 +269,7 @@ export class GehihiClient {
     async saveProvider(event: Event) { event.preventDefault(); const data = this.providerData(event.currentTarget as HTMLFormElement); this.patch({ editProvider: { ...this.state.editProvider, ...data } }); await this.attempt(async () => { await this.api('/providers' + (data.id ? '/' + data.id : ''), data.id ? 'PATCH' : 'POST', data); await this.refresh(); await this.settings(this.state.systemProviders); this.patch({ notice: 'Đã lưu provider. Key được mã hóa phía máy chủ.' }); }); }
     async probe(event: Event, kind: string) {
         const form = (event.currentTarget as HTMLElement).closest('form')!; const data = this.providerData(form); this.patch({ editProvider: { ...this.state.editProvider, ...data } });
-        await this.attempt(async () => { const result = await this.api('/providers/' + kind, 'POST', data); if (kind === 'discover') this.patch({ providerModelCatalog: result, probe: { message: 'Đã tải ' + result.length + ' model. Tick các model muốn sử dụng rồi lưu provider.' } }); else this.patch({ probe: result }); });
+        await this.attempt(async () => { const result = await this.api('/providers/' + kind, 'POST', data); if (kind === 'discover') this.patch({ providerModelCatalog: result, probe: { message: data.type === 'google_vertex' ? 'Đã nạp ' + result.length + ' model từ danh mục Vertex AI. Chọn model rồi bấm Kiểm tra key để xác nhận quyền sử dụng.' : 'Đã tải ' + result.length + ' model. Tick các model muốn sử dụng rồi lưu provider.' } }); else this.patch({ probe: result }); });
     }
     async removeProvider(id: string) { if (!confirm('Xóa provider này? Các lựa chọn đang trỏ đến nó sẽ không chạy được.')) return; await this.attempt(async () => { await this.api('/providers/' + id + (this.state.systemProviders ? '?system=1' : ''), 'DELETE'); await this.refresh(); await this.settings(this.state.systemProviders); }); }
     async auth(event: Event, action: string) {
@@ -231,9 +277,9 @@ export class GehihiClient {
         await this.attempt(async () => { await this.api('/auth/' + action, 'POST', data); if (['forgot', 'reset'].includes(action)) { this.patch({ notice: action === 'forgot' ? 'Nếu email đã đăng ký, hướng dẫn sẽ được gửi.' : 'Đã đổi mật khẩu. Bạn có thể đăng nhập.', modal: 'login' }); return; } const next = new URLSearchParams(location.search).get('next') || ''; location.assign(next.startsWith('/admin') ? next : '/'); });
     }
     async logout() { await this.attempt(async () => { this.close(); await this.api('/auth/logout', 'POST'); location.assign('/'); }); }
-    async importGuest() { await this.attempt(async () => { await this.api('/auth/import', 'POST'); await this.refresh(); this.patch({ notice: 'Đã nhập workspace khách vào tài khoản.' }); }); }
+    async importGuest() { await this.attempt(async () => { await this.api('/auth/import', 'POST'); this.dismissGuestImportPrompt(); await this.refresh(); this.patch({ notice: 'Đã nhập workspace khách vào tài khoản.' }); }); }
     applyTheme(theme: string) { document.documentElement.dataset.theme = theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme; }
     async preference(key: string, value: string) { this.patch({ [key]: value }); if (key === 'theme') this.applyTheme(value); await this.attempt(() => this.api('/preferences', 'PUT', { ...this.state.workspace.preferences, theme: this.state.theme, locale: this.state.locale })); }
     close() { this.patch({ modal: '', editProvider: {}, probe: null }); }
-    destroy() { this.disposed = true; ++this.navigation; clearTimeout(this.polling); clearTimeout(this.fileWatch); window.removeEventListener('popstate', this.pop); }
+    destroy() { this.disposed = true; ++this.navigation; clearTimeout(this.polling); clearTimeout(this.fileWatch); clearTimeout(this.guestImportTimer); clearInterval(this.runTimer); window.removeEventListener('popstate', this.pop); }
 }

@@ -13,7 +13,7 @@
 <form class="adm-card adm-form" @submit(save(event))>
     <div class="two-columns">
         <label>Tên hiển thị<input name="name" required maxlength="100" value="{{ provider['name'] }}"></label>
-        <label>Nhà cung cấp<select name="type" @change(changeType(event))>@foreach(types as t)<option value="{{ t['value'] }}" selected="{{ type == t['value'] }}">{{ t['label'] }}</option>@endforeach</select></label>
+        <label>Nhà cung cấp<select name="type" @bind(type) @change(changeType(event))>@foreach(types as t)<option value="{{ t['value'] }}" @selected(type == t['value'])>{{ t['label'] }}</option>@endforeach</select></label>
     </div>
     @if(editableBase)
     <label>Base URL <small>Địa chỉ API của provider tương thích hoặc tự host.</small><input name="base_url" required maxlength="400" @bind(baseUrl) placeholder="https://…"></label>
@@ -41,7 +41,7 @@
         <p class="muted-caption">Tick model để cho phép dùng. Chỉ bật Nhận ảnh / Suy luận khi đã xác nhận model hỗ trợ.</p>
         <input type="hidden" name="models" value="{{ models }}"><input type="hidden" name="vision_models" value="{{ visionModels }}"><input type="hidden" name="reasoning_models" value="{{ reasoningModels }}">
     </section>
-    <label>Model mặc định<select name="default_model" @bind(defaultModel)><option value="" selected="{{ !defaultModel }}">Dùng model đầu tiên đã chọn</option>@foreach(selectedModels as id)<option value="{{ id }}" selected="{{ defaultModel === id }}">{{ id }}</option>@endforeach</select></label>
+    <label>Model mặc định<select name="default_model" @bind(defaultModel)><option value="" @selected(!defaultModel)>Dùng model đầu tiên đã chọn</option>@foreach(selectedModels as id)<option value="{{ id }}" @selected(defaultModel === id)>{{ id }}</option>@endforeach</select></label>
     @endif
     <div class="checkboxes">
         <label><input type="checkbox" name="enabled" checked="{{ provider['enabled'] }}">Bật provider</label>
@@ -115,7 +115,9 @@
             const data = await send('post', '/admin/providers/' + action, payload(form), 70000);
             if (action === 'discover') {
                 setCatalog(data.models); syncChoices();
-                setMessage('Đã tải ' + data.models.length + ' model. Tick các model muốn sử dụng rồi lưu provider.');
+                setMessage(type === 'google_vertex'
+                    ? 'Đã nạp ' + data.models.length + ' model từ danh mục Vertex AI. Chọn model rồi bấm Kiểm tra key để xác nhận quyền sử dụng.'
+                    : 'Đã tải ' + data.models.length + ' model. Tick các model muốn sử dụng rồi lưu provider.');
             } else {
                 setProbe(data.results.map((r: any) => ({ key: r.key, ok: r.ok, text: 'Key ' + r.key + ' · ' + (r.ok ? 'OK · ' + r.latency_ms + ' ms' : r.message) })));
             }
