@@ -105,10 +105,18 @@ class ProviderModelsTest extends TestCase
     public function test_admin_discovery_reports_provider_failures_without_generic_server_error(): void
     {
         $this->actingAs($this->user(true));
-        Http::fake(['aiplatform.googleapis.com/*' => Http::response(['error' => ['message' => 'Upstream private detail']], 403)]);
-        $this->postJson('/admin/providers/discover', $this->form())->assertUnprocessable()
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response(['error' => ['message' => 'Upstream private detail']], 403)]);
+        $this->postJson('/admin/providers/discover', [...$this->form(), 'type' => 'google'])->assertUnprocessable()
             ->assertJsonPath('message', 'Không tải được danh sách model: HTTP 403')
             ->assertDontSee('Upstream private detail');
+    }
+
+    public function test_vertex_catalog_denial_explains_manual_model_check_without_invalidating_key(): void
+    {
+        $this->actingAs($this->user(true));
+        Http::fake(['aiplatform.googleapis.com/*' => Http::response([], 401)]);
+        $this->postJson('/admin/providers/discover', $this->form())->assertUnprocessable()
+            ->assertJsonPath('message', 'Google không cho tải danh sách model bằng key Vertex Express Mode này. Hãy thêm Model ID rồi bấm Kiểm tra key; lỗi tải danh sách không có nghĩa key không dùng được.');
     }
 
 

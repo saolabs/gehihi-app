@@ -201,6 +201,9 @@ return $out;
             }
             $r = $this->http->send('GET', $base.($query ? '?'.http_build_query($query) : ''), $headers);
             if (! $r->successful()) {
+                if ($p->type === 'google_vertex' && in_array($r->status(), [401, 403], true)) {
+                    throw new ProviderFailure('Google không cho tải danh sách model bằng key Vertex Express Mode này. Hãy thêm Model ID rồi bấm Kiểm tra key; lỗi tải danh sách không có nghĩa key không dùng được.', $r->status());
+                }
                 throw new ProviderFailure('Không tải được danh sách model: HTTP '.$r->status(), $r->status());
             }
             $payload = $this->http->json($r);
