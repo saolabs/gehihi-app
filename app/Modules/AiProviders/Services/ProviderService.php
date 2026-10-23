@@ -56,6 +56,10 @@ class ProviderService
         if (! $keys && ! ($data['clear_keys'] ?? false) && $old?->type === $type) {
             $keys = $old->secrets ?? [];
         }
+        // Key Vertex AI Express Mode có dạng AQ.…; Gemini API (AI Studio, AIza…) từ chối nó bằng API_KEY_INVALID.
+        if ($type === 'google' && array_filter($keys, fn ($k) => str_starts_with($k, 'AQ.'))) {
+            throw ValidationException::withMessages(['api_keys' => 'Key dạng AQ.… là key Vertex AI (Express Mode). Hãy chọn nhà cung cấp "Google Cloud (Vertex AI)"; "Google Gemini" chỉ nhận key AI Studio (AIza…).']);
+        }
         if (! $keys && ! in_array($type, ['openai_compatible', 'searxng'])) {
             throw ValidationException::withMessages(['api_keys' => 'Provider cần ít nhất một API key.']);
         }

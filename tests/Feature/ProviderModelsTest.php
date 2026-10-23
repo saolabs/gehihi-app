@@ -119,6 +119,14 @@ class ProviderModelsTest extends TestCase
         $this->assertSame('OK', $out['text']); // key sai bị bỏ qua, chuyển sang key kế
     }
 
+    public function test_vertex_express_key_on_gemini_api_type_points_to_vertex(): void
+    {
+        $this->actingAs($this->user(true));
+        $this->postJson('/admin/providers', ['name' => 'G', 'type' => 'google', 'api_keys' => "AQ.vertex-express-key", 'models' => 'gemini-3.5-flash'])
+            ->assertUnprocessable()->assertJsonPath('errors.api_keys.0', fn ($m) => str_contains($m, 'Google Cloud (Vertex AI)'));
+        Http::assertNothingSent();
+    }
+
     public function test_admin_form_renders_saved_models_without_client_only_helpers(): void
     {
         $this->actingAs($this->user(true));
