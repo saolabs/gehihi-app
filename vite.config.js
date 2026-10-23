@@ -52,6 +52,7 @@ const devPort = Number(process.env.VITE_DEV_PORT || 5174);
 const hmrClientPort = Number(process.env.VITE_HMR_CLIENT_PORT || devPort);
 
 export default defineConfig({
+    base: `/static/saola/${context}/`,
     plugins: [
         saolaBuilder({ context, watch: true }),
         saolaAssets({ context, root: __dirname }),

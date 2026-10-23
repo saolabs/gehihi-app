@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'katex/dist/katex.min.css';
 @source '../saola/**/*.sao';
 
 /* Gehihi app — cùng hệ token với landing (gehihi-landing-page/public/assets/css/site.css). */
@@ -282,6 +283,10 @@ button, a, label { -webkit-tap-highlight-color: transparent; }
 .markdown th { background: var(--surface-subtle); font-weight: 600; }
 .markdown blockquote { margin: 0 0 1em; padding: 4px 0 4px 14px; border-left: 3px solid var(--brand-border); color: var(--fg-2); }
 .markdown hr { margin: 1.5em 0; border: 0; border-top: 1px solid var(--line); }
+.markdown .katex { font-size: 1.1em; }
+.markdown .katex-display { margin: .5em 0; padding: .4em 0; overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+.markdown .math-block { margin: .75em 0; min-width: 0; }
+.markdown .katex-error { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .response-wait { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 6px 0; }
 .response-timer { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }

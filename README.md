@@ -41,6 +41,7 @@ Adapter văn bản: Gemini, Vertex AI (Express Mode), OpenAI, Anthropic và API 
 
 - Mỗi lượt chụp snapshot hướng dẫn/revision dự án ở server. Lượt mới đọc hướng dẫn mới; run đang chạy/tiếp tục giữ snapshot của nó.
 - Tin nhắn dạng cây: sửa câu hỏi/tạo lại giữ các nhánh. Có tìm kiếm, ghim, lưu trữ, chuyển dự án và xuất Markdown/JSON.
+- Câu trả lời hiển thị công thức bằng KaTeX và mhchem: `$...$` / `\(...\)` trong dòng, `$$...$$` / `\[...\]` riêng dòng, `\ce{...}` cho hóa học và `\pu{...}` cho đơn vị bên trong công thức. Font được đóng gói cùng app; khối code giữ nguyên mã LaTeX.
 - Khách có workspace riêng tối đa 7 ngày; sau đăng nhập có thể nhập workspace khách. Chat tạm thời được dọn sau 24 giờ khi scheduler hoạt động.
 - Research tạo kế hoạch → tìm kiếm → đọc trang → đánh giá phần thiếu → tìm bổ sung → báo cáo. Có sổ nguồn, tiến độ, dừng và tiếp tục checkpoint trong giới hạn còn lại.
 - Key mã hóa ở server, kiểm tra scope mọi tài nguyên, CSRF cho mutation, chặn mạng riêng/metadata và redirect không hợp lệ khi gọi ra ngoài.
